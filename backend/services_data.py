@@ -375,21 +375,128 @@ class ServicesDataManager:
         
         return processed_headers
 
-    def calculate_enhanced_pricing(self, category, region, plot_area, headers, pricing_data):
-        """Enhanced pricing calculation that handles all service types properly"""
+    def _map_service_name(self, frontend_service_name):
+        """Map frontend service names to actual pricing JSON service names"""
+        service_name_mapping = {
+            # Project Registration Services
+            "PROJECT REGISTRATION SERVICES": "Project Registration ",
+            
+            # Compliance Services
+            "CHANGE OF PROMOTER": "Change of Promoter (section 15)",
+            "CORRECTION (CHANGE OF FSI)": "Project Correction - Change of FSI/ Plan",
+            "MAHARERA PROFILE UPDATION": "Profile Updation ",
+            "MAHARERA PROFILE MIGRATION": "Profile Migration",
+            "REMOVAL FROM ABEYANCE (QPR)": "Removal of Abeyance - QPR, Lapsed",
+            "Extension of Project Completion Date U/S 7(3)": "Project Extension - Section 7.3",
+            "PROJECT CLOSURE": "Project Closure ",
+            "10.	Extension of Project Completion Date u/s 6": "Project Extension - Section 7.3",
+            "POST FACTO EXTENSION": "Project Extension - Post Facto",
+            "EXTENSION UNDER ORDER 40": "Project Extension - Order No. 40",
+            "Correction (Change of Bank Account)": "Project Correction - Change of Bank Account",
+            "Removal from Abeyance (Lapsed)": "Removal of Abeyance - QPR, Lapsed",
+            "Project De-registration": "Deregistration ",
+            "Drafting of Title Report in Format A": "Drafting of Title Report in Format A",
+            "Correction - Change of other Details": "Project Correction - Change of Other Details",
+            
+            # Legal Services
+            "LEGAL CONSULTATION": "Drafting of Legal Documents",
+            
+            # Package Services
+            "CONSULTATION & ADVISORY SERVICES": "Package A",
+            "QUATERLY PROGRESS REPORTS": "QPR",
+            "QUARTERLY PROGRESS REPORTS": "QPR",
+            "RERA PROFILE UPDATION & COMPLIANCE": "Profile Updation ",
+            "MAHARERA PROCESS-LINKED APPLICATION SUPPORT": "Project Extension - Section 7.3",
+            "PROFESSIONAL CERTIFICATIONS": "Package B",
+            "RERA ANNUAL AUDIT CONSULTATION": "Package C",
+            "BESPOKE OFFERINGS": "Package D",
+            "Regulatory Hearing & Notices": "Package D",
+            
+            # Add-on Services
+            "LIAISONING": "Liasioning ",
+            "Legal Documentation": "Drafting of Legal Documents",
+            "Title Report": "Title Certificate",
+            "Search Report": "Drafting of Title Report in Format A",
+            "SRO Membership": "SRO Membership",
+            "Form 1": "Form 1",
+            "Form 2": "Form 2 ",
+            "Form 3": "Form 3",
+            "Form 5": "Form 5"
+        }
         
-        # Determine pricing band
+        # Return mapped name or original name if no mapping exists
+        return service_name_mapping.get(frontend_service_name, frontend_service_name)
+
+    def _find_pricing_from_array(self, category, region, plot_area, service_name, pricing_data):
+        """Find pricing for a specific service from the flat pricing array"""
+        
+        # Map the frontend service name to the actual JSON service name
+        mapped_service_name = self._map_service_name(service_name)
+        
+        # Fix category format (frontend sends "category 1" but JSON has "Category 1")
+        if category.lower().startswith('category'):
+            formatted_category = category.title()  # "category 1" -> "Category 1"
+        else:
+            formatted_category = category
+        
+        # Debug logging removed for cleaner output
+        
+        # Determine pricing band - exact matching with what's in the data
         if plot_area <= 500:
             band = "0-500"
         elif plot_area <= 2000:
-            band = "500-2000"
+            band = "500-2000" 
         elif plot_area <= 4000:
             band = "2000-4000"
         elif plot_area <= 6500:
             band = "4000-6500"
         else:
             band = "6500 and above"
+        
+        # Search through the pricing data array
+        for item in pricing_data:
+            # Match all criteria using the mapped service name and formatted category
+            if (item.get('Developer Type ') == formatted_category and 
+                item.get('Project location ') == region and
+                item.get('Plot Area') == band and
+                item.get('Service', '').strip() == mapped_service_name.strip()):
+                
+                amount = item.get('Amount')
+                # Handle string amounts and special cases
+                if isinstance(amount, str):
+                    if amount == '-' or amount.strip() == '':
+                        return 0
+                    try:
+                        parsed_amount = float(amount.replace(',', ''))
+                        return parsed_amount
+                    except ValueError:
+                        return 50000
+                elif isinstance(amount, (int, float)):
+                    return float(amount)
+                else:
+                    return 50000
+        
+        # Fallback: try to find a close match by relaxing some criteria
+        for item in pricing_data:
+            if (item.get('Developer Type ') == formatted_category and 
+                item.get('Service', '').strip() == mapped_service_name.strip()):
+                amount = item.get('Amount')
+                if isinstance(amount, str):
+                    if amount == '-' or amount.strip() == '':
+                        return 0
+                    try:
+                        return float(amount.replace(',', ''))
+                    except ValueError:
+                        continue
+                elif isinstance(amount, (int, float)):
+                    return float(amount)
+                    
+        # Final fallback
+        return 50000
 
+    def calculate_enhanced_pricing(self, category, region, plot_area, headers, pricing_data):
+        """Enhanced pricing calculation that handles all service types properly with flat pricing array"""
+        
         breakdown, total, total_services = [], 0.0, 0
 
         for header_data in headers:
@@ -410,23 +517,19 @@ class ServicesDataManager:
                 service_id = service.get('id')
                 s_name = service.get('label') or service.get('name', '')
                 
-                # Get base pricing
-                try:
-                    base = pricing_data[category][region][band][s_name]['amount']
-                except Exception:
-                    base = 50000
+                # Get exact pricing from JSON - no multipliers applied
+                exact_price = self._find_pricing_from_array(category, region, plot_area, s_name, pricing_data)
 
                 # **Get actual subservices with proper names**
                 actual_subservices = self.get_actual_subservices(service_id)
                 
-                # Calculate multiplier based on number of subservices
-                multiplier = 1.0 + (len(actual_subservices) * 0.1)
-                total_amt = base * multiplier
+                # Use exact price from JSON without any multipliers
+                total_amt = exact_price
 
                 header_services.append({
                     "id": service_id,
                     "name": s_name,
-                    "baseAmount": base,
+                    "baseAmount": exact_price,
                     "totalAmount": round(total_amt, 2),
                     "subServices": actual_subservices  # **Proper subservices with names**
                 })

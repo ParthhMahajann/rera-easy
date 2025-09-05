@@ -394,8 +394,11 @@ def calculate_pricing():
 
         app.logger.debug(f"Calculate pricing - Headers: {headers}")
 
+        # **Load fresh pricing data on each request to avoid caching issues**
+        fresh_pricing_data = load_pricing_data()
+        
         # **Use enhanced pricing calculation from services_data.py**
-        result = calculate_enhanced_pricing(category, region, plot_area, headers, PRICING_DATA)
+        result = calculate_enhanced_pricing(category, region, plot_area, headers, fresh_pricing_data)
         
         app.logger.debug(f"Calculate pricing - Result: {result}")
         return jsonify(result)
