@@ -17,7 +17,12 @@ import {
   CardContent,
   CircularProgress,
   Alert,
-  Chip
+  Chip,
+  Container,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -25,7 +30,8 @@ import {
   Business as BusinessIcon,
   LocationOn as LocationIcon,
   CalendarToday as CalendarIcon,
-  AccountBalance as AccountBalanceIcon
+  AccountBalance as AccountBalanceIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { SERVICES } from '../lib/servicesData';
 
@@ -158,6 +164,53 @@ const QuotationSummary = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Excel-like table styles with white/blue theme
+  const excelTableStyles = {
+    '& .MuiTableContainer-root': {
+      border: '1px solid #e3f2fd',
+      borderRadius: '8px',
+      boxShadow: '0 2px 8px rgba(25,118,210,0.1)'
+    },
+    '& .MuiTable-root': {
+      borderCollapse: 'separate',
+      borderSpacing: 0,
+    },
+    '& .MuiTableHead-root': {
+      '& .MuiTableCell-root': {
+        backgroundColor: '#1976d2',
+        color: 'white',
+        borderRight: '1px solid rgba(255,255,255,0.2)',
+        borderBottom: 'none',
+        padding: '12px 16px',
+        fontSize: '0.9rem',
+        fontWeight: 600,
+        '&:last-child': {
+          borderRight: 'none',
+        },
+      },
+    },
+    '& .MuiTableBody-root': {
+      '& .MuiTableRow-root': {
+        '&:nth-of-type(even)': {
+          backgroundColor: '#f8faff',
+        },
+        '&:hover': {
+          backgroundColor: '#e3f2fd',
+        },
+        '& .MuiTableCell-root': {
+          borderRight: '1px solid #e3f2fd',
+          borderBottom: '1px solid #e3f2fd',
+          padding: '10px 16px',
+          fontSize: '0.85rem',
+          color: '#1a1a1a',
+          '&:last-child': {
+            borderRight: 'none',
+          },
+        },
+      },
+    },
+  };
+
   useEffect(() => {
     const fetchQuotation = async () => {
       try {
@@ -271,179 +324,178 @@ const QuotationSummary = () => {
   }
 
   return (
-    <Box sx={{ maxWidth: '1200px', margin: '0 auto', p: 3, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      {/* PDF-like Header */}
-      <Paper elevation={3} sx={{ mb: 3, overflow: 'hidden' }}>
-        <Box sx={{ 
-          background: 'linear-gradient(45deg, #1976d2 30%, #21CBF3 90%)',
-          color: 'white',
-          p: 3,
-          textAlign: 'center'
-        }}>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            QUOTATION SUMMARY
-          </Typography>
-          <Typography variant="h6">
-            {quotation.projectName || quotation.developerName}
-          </Typography>
-          <Chip 
-            label={`ID: ${quotation.id}`}
-            variant="outlined"
-            sx={{ 
-              color: 'white', 
-              borderColor: 'white',
-              mt: 1,
-              fontWeight: 'bold'
-            }}
-          />
-        </Box>
-      </Paper>
+    <Box sx={{ backgroundColor: '#fafbff', minHeight: '100vh' }}>
+      <Container maxWidth="lg" sx={{ py: 2 }}>
+        {/* Main Content */}
+        <Paper elevation={2} sx={{ p: 3, backgroundColor: 'white', borderRadius: 2 }}>
+          {/* Document Header */}
+          <Box sx={{ 
+            textAlign: 'center', 
+            mb: 3, 
+            p: 3,
+            background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+            color: 'white',
+            borderRadius: 2,
+            boxShadow: '0 4px 12px rgba(25,118,210,0.3)'
+          }}>
+            <Typography variant="h3" fontWeight="bold" gutterBottom sx={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+              QUOTATION SUMMARY
+            </Typography>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              mt: 2,
+              flexWrap: 'wrap',
+              gap: 2
+            }}>
+              <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                ID: {quotation.id}
+              </Typography>
+              <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                {new Date().toLocaleDateString('en-GB')}
+              </Typography>
+            </Box>
+          </Box>
 
-      {/* Project Details Card */}
-      <Paper elevation={2} sx={{ mb: 3 }}>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="h5" color="primary" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-            <BusinessIcon sx={{ mr: 1 }} />
-            Project Details
-          </Typography>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined" sx={{ height: '100%' }}>
-                <CardContent>
-                  <Typography variant="h6" color="secondary" gutterBottom>
-                    Developer Information
-                  </Typography>
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body1" sx={{ mb: 1 }}>
-                      <strong>Developer:</strong> {quotation.developerName || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mb: 1 }}>
-                      <strong>Type:</strong> {quotation.developerType || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>RERA Number:</strong> {quotation.reraNumber || 'N/A'}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+          {/* Project Details Section */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" fontWeight="bold" sx={{ 
+              mb: 2, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#1976d2',
+              borderBottom: '2px solid #e3f2fd',
+              pb: 1
+            }}>
+              <BusinessIcon sx={{ mr: 1 }} />
+              Project Information
+            </Typography>
             
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined" sx={{ height: '100%' }}>
-                <CardContent>
-                  <Typography variant="h6" color="secondary" gutterBottom>
-                    Project Information
+            {/* Single Unified Project Information Table */}
+            <TableContainer component={Paper} sx={{ ...excelTableStyles }}>
+              <Table>
+                <TableBody>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', width: '20%', backgroundColor: '#e3f2fd' }}>Developer Name</TableCell>
+                    <TableCell sx={{ width: '30%' }}>{quotation.developerName || 'N/A'}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', width: '20%', backgroundColor: '#e3f2fd' }}>Project Name</TableCell>
+                    <TableCell sx={{ width: '30%' }}>{quotation.projectName || 'N/A'}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Developer Type</TableCell>
+                    <TableCell>{quotation.developerType || 'N/A'}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Project Region</TableCell>
+                    <TableCell>{quotation.projectRegion || 'N/A'}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Promoter Name</TableCell>
+                    <TableCell>{quotation.promoterName || 'N/A'}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Plot Area</TableCell>
+                    <TableCell>{quotation.plotArea || 'N/A'}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>RERA Number</TableCell>
+                    <TableCell>{quotation.reraNumber || 'N/A'}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Validity</TableCell>
+                    <TableCell>{quotation.validity || 'N/A'}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Payment Schedule</TableCell>
+                    <TableCell colSpan={3}>{quotation.paymentSchedule || 'N/A'}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+
+          {/* Services Section */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" fontWeight="bold" sx={{ 
+              mb: 2, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#1976d2',
+              borderBottom: '2px solid #e3f2fd',
+              pb: 1
+            }}>
+              <AssignmentIcon sx={{ mr: 1 }} />
+              Selected Services & Pricing
+            </Typography>
+
+            {quotation.headers && quotation.headers.length > 0 ? (
+              quotation.headers.map((header) => (
+                <Box key={header.id} sx={{ mb: 3 }}>
+                  <Typography 
+                    variant="h6" 
+                    sx={{ 
+                      mb: 2, 
+                      p: 2, 
+                      background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)', 
+                      color: 'white', 
+                      borderRadius: 2,
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 8px rgba(25,118,210,0.3)'
+                    }}
+                  >
+                    {header.name}
                   </Typography>
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
-                      <LocationIcon sx={{ mr: 1, fontSize: 16 }} />
-                      <strong>Region:</strong> {quotation.projectRegion || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mb: 1 }}>
-                      <strong>Plot Area:</strong> {quotation.plotArea || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
-                      <CalendarIcon sx={{ mr: 1, fontSize: 16 }} />
-                      <strong>Validity:</strong> {quotation.validity || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
-                      <AccountBalanceIcon sx={{ mr: 1, fontSize: 16 }} />
-                      <strong>Payment:</strong> {quotation.paymentSchedule || 'N/A'}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Box>
-      </Paper>
 
-      {/* Services Section */}
-      <Paper elevation={2} sx={{ mb: 3 }}>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="h5" color="primary" gutterBottom sx={{ mb: 3 }}>
-            Selected Services
-          </Typography>
-
-          {quotation.headers && quotation.headers.length > 0 ? (
-            quotation.headers.map((header) => (
-              <Box key={header.id} sx={{ mb: 4 }}>
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
-                    mb: 2, 
-                    p: 2, 
-                    backgroundColor: 'primary.main', 
-                    color: 'white', 
-                    borderRadius: 1,
-                    fontWeight: 'bold'
-                  }}
-                >
-                  {header.name}
-                </Typography>
-
-                {header.services && header.services.length > 0 ? (
-                  header.services.map((service) => (
-                    <Card key={service.id} variant="outlined" sx={{ mb: 2 }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                          <Typography variant="h6" color="secondary" sx={{ flex: 1 }}>
-                            {service.name}
-                          </Typography>
-                          {service.price > 0 && (
-                            <Chip 
-                              label={`₹${service.price.toLocaleString()}`}
-                              color="primary"
-                              variant="filled"
-                              sx={{ 
-                                fontWeight: 'bold',
-                                fontSize: '0.9rem',
-                                ml: 2
-                              }}
-                            />
-                          )}
-                        </Box>
-
-                        {service.subServices && service.subServices.length > 0 && (
-                          <TableContainer component={Box}>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>
-                                    Sub-Services
-                                  </TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {service.subServices.map((subService, index) => (
-                                  <TableRow key={subService.id} sx={{ 
-                                    '&:nth-of-type(odd)': { backgroundColor: '#fafafa' }
-                                  }}>
-                                    <TableCell>
-                                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                        <CheckCircleIcon 
-                                          sx={{ 
-                                            mt: 0.2,
-                                            fontSize: 16, 
-                                            color: 'success.main',
-                                            flexShrink: 0
-                                          }} 
+                  <TableContainer component={Paper} sx={{ ...excelTableStyles, mb: 2 }}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ width: '50%' }}>Service Name</TableCell>
+                          <TableCell>Sub-Services</TableCell>
+                          <TableCell align="right" sx={{ width: '20%' }}>Price (₹)</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {header.services && header.services.length > 0 ? (
+                          header.services.map((service, serviceIndex) => (
+                            <TableRow key={service.id || serviceIndex}>
+                              <TableCell sx={{ fontWeight: 'bold', verticalAlign: 'top' }}>
+                                {service.name}
+                              </TableCell>
+                              <TableCell sx={{ verticalAlign: 'top' }}>
+                                {service.subServices && service.subServices.length > 0 ? (
+                                  <List dense sx={{ py: 0 }}>
+                                    {service.subServices.map((subService, subIndex) => (
+                                      <ListItem key={subService.id || subIndex} sx={{ py: 0.25, pl: 0 }}>
+                                        <ListItemIcon sx={{ minWidth: 20 }}>
+                                          <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
+                                        </ListItemIcon>
+                                        <ListItemText 
+                                          primary={subService.name}
+                                          sx={{ my: 0 }}
+                                          primaryTypographyProps={{ fontSize: '0.8rem' }}
                                         />
-                                        <Typography variant="body2" sx={{ lineHeight: 1.4 }}>
-                                          {subService.name}
-                                        </Typography>
-                                      </Box>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
+                                      </ListItem>
+                                    ))}
+                                  </List>
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                                    No sub-services
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold', verticalAlign: 'top' }}>
+                                {(service.price || 0).toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} align="center">
+                              <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                                No services selected for this category
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </CardContent>
-                    </Card>
-                  ))
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 ) : (
                   <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', ml: 2 }}>
                     No services selected for this category
@@ -456,63 +508,84 @@ const QuotationSummary = () => {
               No services selected
             </Alert>
           )}
-        </Box>
-      </Paper>
+          </Box>
 
-      {/* Total Amount Section - Simplified */}
-      <Paper elevation={2} sx={{ mb: 3 }}>
-        <Box sx={{ p: 3 }}>
+          {/* Total Amount Section */}
           <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            p: 3,
-            backgroundColor: 'success.light',
-            borderRadius: 2
+            p: 2, 
+            backgroundColor: '#f0f7ff', 
+            border: '1px solid #1976d2',
+            borderRadius: 1,
+            mb: 3
           }}>
-            <Typography variant="h4" fontWeight="bold" color="success.main">
-              Total Amount
+            <Typography variant="h6" fontWeight="bold" color="primary">
+              Total Amount:
             </Typography>
-            <Typography variant="h3" fontWeight="bold" color="success.main">
+            <Typography variant="h5" fontWeight="bold" color="primary">
               ₹{(quotation.totalAmount || calculateTotalAmount()).toLocaleString()}
             </Typography>
           </Box>
-        </Box>
-      </Paper>
 
-      {/* Action Buttons */}
-      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 4 }}>
-        <Button
-          variant="outlined"
-          startIcon={<DownloadIcon />}
-          onClick={handleDownload}
-          size="large"
-        >
-          Download Quotation
-        </Button>
-        
-        <Button
-          variant="contained"
-          startIcon={<CheckCircleIcon />}
-          onClick={handleCompleteQuotation}
-          size="large"
-          sx={{ 
-            px: 4,
-            background: 'linear-gradient(45deg, #4caf50 30%, #8bc34a 90%)'
-          }}
-        >
-          Complete Quotation
-        </Button>
-      </Box>
+          {/* Action Buttons */}
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3 }}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownload}
+              size="large"
+              sx={{
+                borderColor: '#1976d2',
+                color: '#1976d2',
+                '&:hover': {
+                  backgroundColor: '#f0f7ff',
+                  borderColor: '#1976d2'
+                }
+              }}
+            >
+              Download Quotation
+            </Button>
+            
+            <Button
+              variant="contained"
+              startIcon={<CheckCircleIcon />}
+              onClick={handleCompleteQuotation}
+              size="large"
+              sx={{ 
+                px: 4,
+                backgroundColor: '#1976d2',
+                '&:hover': {
+                  backgroundColor: '#1565c0'
+                }
+              }}
+            >
+              Complete Quotation
+            </Button>
+          </Box>
 
-      {/* Footer */}
-      <Box sx={{ textAlign: 'center', mt: 4, p: 2, color: 'text.secondary' }}>
-        <Divider sx={{ mb: 2 }} />
-        <Typography variant="body2">
-          Generated on {new Date().toLocaleDateString()} | 
-          Quotation ID: {quotation.id}
-        </Typography>
-      </Box>
+          {/* Footer */}
+          <Box sx={{ 
+            textAlign: 'center', 
+            pt: 3, 
+            mt: 2,
+            borderTop: '2px solid #e3f2fd',
+            color: 'text.secondary',
+            backgroundColor: '#f8faff',
+            borderRadius: 2,
+            p: 2
+          }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+              This is a computer-generated quotation and does not require a signature.
+            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 2, mb: 1 }}>
+              <Typography variant="body2">Generated: {new Date().toLocaleDateString('en-GB')}</Typography>
+              <Typography variant="body2">ID: {quotation.id}</Typography>
+            </Box>
+          </Box>
+        </Paper>
+      </Container>
     </Box>
   );
 };

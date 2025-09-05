@@ -223,8 +223,16 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
                   Origin: {service.origin}
                 </Typography>
               )}
+              
+              {/* Show hint for services with sub-services when not selected */}
+              {!isSelected && service.subServices && service.subServices.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 4, fontStyle: 'italic' }}>
+                  Contains {service.subServices.length} sub-service{service.subServices.length !== 1 ? 's' : ''} - Select service to configure
+                </Typography>
+              )}
 
-              {service.subServices && service.subServices.length > 0 && (
+              {/* Only show sub-services when the main service is selected */}
+              {isSelected && service.subServices && service.subServices.length > 0 && (
                 <Box sx={{ ml: 4, mt: 2 }}>
                   <Typography variant="body2" fontWeight={600} color="text.primary" sx={{ mb: 2 }}>
                     Sub-Services ({service.subServices.length}):

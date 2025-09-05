@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Signup() {
+  const navigate = useNavigate();
   const [fname, setFname] = useState("");
   const [lname, setLname] = useState("");
   const [username, setUsername] = useState("");
@@ -121,8 +123,43 @@ export default function Signup() {
         maxWidth: "450px", 
         margin: "50px auto", 
         padding: "30px",
-        textAlign: "center"
+        textAlign: "center",
+        position: "relative"
       }}>
+        {/* Back Button */}
+        <button
+          onClick={() => navigate('/dashboard')}
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 12px",
+            backgroundColor: "#f8f9fa",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "14px",
+            fontWeight: "500",
+            color: "#333",
+            transition: "all 0.2s ease",
+            fontFamily: "inherit"
+          }}
+          onMouseOver={(e) => {
+            e.target.style.backgroundColor = "#e9ecef";
+            e.target.style.borderColor = "#ccc";
+          }}
+          onMouseOut={(e) => {
+            e.target.style.backgroundColor = "#f8f9fa";
+            e.target.style.borderColor = "#ddd";
+          }}
+        >
+          <span style={{ fontSize: "16px" }}>←</span>
+          Back
+        </button>
+        
         <h2>Access Denied</h2>
         <p>Only admins and managers can create new users.</p>
       </div>
@@ -137,8 +174,43 @@ export default function Signup() {
       backgroundColor: "white",
       borderRadius: "12px",
       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-      fontFamily: "system-ui, -apple-system, sans-serif"
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      position: "relative"
     }}>
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/dashboard')}
+        style={{
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "8px 12px",
+          backgroundColor: "#f8f9fa",
+          border: "1px solid #ddd",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontSize: "14px",
+          fontWeight: "500",
+          color: "#333",
+          transition: "all 0.2s ease",
+          fontFamily: "inherit"
+        }}
+        onMouseOver={(e) => {
+          e.target.style.backgroundColor = "#e9ecef";
+          e.target.style.borderColor = "#ccc";
+        }}
+        onMouseOut={(e) => {
+          e.target.style.backgroundColor = "#f8f9fa";
+          e.target.style.borderColor = "#ddd";
+        }}
+      >
+        <span style={{ fontSize: "16px" }}>←</span>
+        Back
+      </button>
+      
       <h2 style={{ 
         textAlign: "center", 
         marginBottom: "30px", 

@@ -386,7 +386,7 @@ export default function Dashboard() {
   // Get current logged-in user information for display
   const getCurrentUserDisplay = () => {
     if (user) {
-      return `${user.fname} ${user.lname} (${user.role?.toUpperCase()}) - ID: ${user.id || 'N/A'}`;
+      return `${user.fname} ${user.lname} (${user.role?.toUpperCase()})`;
     }
     return 'Loading...';
   };

@@ -14,6 +14,7 @@ import QuotationServices from './pages/QuotationServices';
 import QuotationPricing from './components/QuotationPricing';
 import QuotationTerms from './components/QuotationTerms';
 import QuotationSummary from './components/QuotationSummary';
+import QuotationView from './pages/QuotationView';
 
 function App() {
   const token = localStorage.getItem('token');
@@ -105,6 +106,15 @@ function App() {
           element={
             <ProtectedRoute>
               <QuotationTerms />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/quotations/:id/view"
+          element={
+            <ProtectedRoute>
+              <QuotationView />
             </ProtectedRoute>
           }
         />
