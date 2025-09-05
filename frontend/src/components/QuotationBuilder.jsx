@@ -160,6 +160,8 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
   // Service Card with clean professional styling
   const ServiceCard = ({ service, isSelected, onToggle, headerName }) => {
     const requiresYearQuarter = service.requiresYearQuarter;
+    const requiresYearOnly = service.requiresYearOnly;
+    const requiresYearSelection = requiresYearQuarter || requiresYearOnly;
     const serviceKey = `${headerName}-${service.id}`;
     
     // Check if this addon service is already selected in another header
@@ -208,8 +210,8 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
                         </Typography>
                       )}
                     </Typography>
-                    {requiresYearQuarter && (
-                      <Tooltip title="This service requires year and quarter selection">
+                    {requiresYearSelection && (
+                      <Tooltip title={requiresYearOnly ? "This service requires year selection" : "This service requires year and quarter selection"}>
                         <ScheduleIcon sx={{ ml: 1, fontSize: 16, color: 'orange' }} />
                       </Tooltip>
                     )}
@@ -279,110 +281,201 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
               )}
 
               {/* Year and Quarter Selection for specific services */}
-              {isSelected && requiresYearQuarter && (
-                <Box sx={{ ml: 4, mt: 2, p: 2, backgroundColor: '#f8f9fa', borderRadius: 1 }}>
-                  <Typography variant="body2" fontWeight={600} color="text.primary" sx={{ mb: 2 }}>
-                    <DateRangeIcon sx={{ fontSize: 16, mr: 1, verticalAlign: 'middle' }} />
-                    Select Years and Quarters
+              {isSelected && requiresYearSelection && (
+                <Box sx={{ 
+                  ml: 4, 
+                  mt: 2, 
+                  p: 2, 
+                  backgroundColor: '#f8fafc',
+                  borderRadius: 1,
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <DateRangeIcon sx={{ 
+                      fontSize: 16, 
+                      mr: 1, 
+                      color: '#1976d2'
+                    }} />
+                  <Typography 
+                    variant="body2" 
+                    fontWeight={600} 
+                    color="text.primary"
+                  >
+                    {requiresYearOnly ? 'Select Years' : 'Select Years and Quarters'}
                   </Typography>
+                  </Box>
 
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
-                        Select Years:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {YEAR_OPTIONS.map((year) => (
-                          <FormControlLabel
-                            key={year.value}
-                            control={
-                              <Checkbox
-                                size="small"
-                                checked={(selectedYears[serviceKey] || []).includes(year.value)}
-                                onChange={(e) => {
-                                  const currentYears = selectedYears[serviceKey] || [];
-                                  let newYears;
-                                  
-                                  if (e.target.checked) {
-                                    newYears = [...currentYears, year.value];
-                                  } else {
-                                    newYears = currentYears.filter(y => y !== year.value);
-                                  }
-                                  
-                                  setSelectedYears(prev => ({
-                                    ...prev,
-                                    [serviceKey]: newYears
-                                  }));
-                                  
-                                  // Auto-update quarters based on selected years
-                                  const autoSelectedQuarters = getAllQuartersForYears(newYears);
-                                  setSelectedQuarters(prev => ({
-                                    ...prev,
-                                    [serviceKey]: autoSelectedQuarters
-                                  }));
-                                }}
-                                color="primary"
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: 1,
+                    maxHeight: 250,
+                    overflowY: 'auto'
+                  }}>
+                    {YEAR_OPTIONS.map((year) => {
+                      const isYearSelected = (selectedYears[serviceKey] || []).includes(year.value);
+                      const yearQuarters = QUARTER_OPTIONS[year.value] || [];
+                      const selectedQuartersForYear = (selectedQuarters[serviceKey] || []).filter(q => q.startsWith(year.value + '-')).length;
+                      
+                      return (
+                        <Box key={year.value}>
+                          {/* Compact Year Selection */}
+                          <Box
+                            sx={{
+                              p: 1,
+                              backgroundColor: isYearSelected ? '#e3f2fd' : 'white',
+                              borderRadius: 1,
+                              border: '1px solid #e0e0e0',
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: '#f5f5f5'
+                              }
+                            }}
+                            onClick={(e) => {
+                              if (e.target.type !== 'checkbox') {
+                                const checkbox = e.currentTarget.querySelector('input[type="checkbox"]');
+                                if (checkbox) checkbox.click();
+                              }
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={isYearSelected}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      const currentYears = selectedYears[serviceKey] || [];
+                                      const currentQuarters = selectedQuarters[serviceKey] || [];
+                                      let newYears;
+                                      let newQuarters = [...currentQuarters];
+                                      
+                                      if (e.target.checked) {
+                                        // Add year
+                                        newYears = [...currentYears, year.value];
+                                        // Auto-select quarters only if not year-only service
+                                        if (!requiresYearOnly) {
+                                          const yearQuarterValues = yearQuarters.map(q => q.value);
+                                          newQuarters = [...currentQuarters, ...yearQuarterValues];
+                                        }
+                                      } else {
+                                        // Remove year and its quarters
+                                        newYears = currentYears.filter(y => y !== year.value);
+                                        newQuarters = currentQuarters.filter(q => !q.startsWith(year.value + '-'));
+                                      }
+                                      
+                                      setSelectedYears(prev => ({
+                                        ...prev,
+                                        [serviceKey]: newYears
+                                      }));
+                                      
+                                      setSelectedQuarters(prev => ({
+                                        ...prev,
+                                        [serviceKey]: newQuarters
+                                      }));
+                                    }}
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Typography 
+                                    variant="body2" 
+                                    fontWeight={500}
+                                  >
+                                    {year.label}
+                                  </Typography>
+                                }
+                                sx={{ m: 0 }}
                               />
-                            }
-                            label={year.label}
-                            sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-                          />
-                        ))}
-                      </Box>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
-                        Select Quarters:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, maxHeight: 200, overflow: 'auto' }}>
-                        {Object.values(QUARTER_OPTIONS).flat().map((quarter) => (
-                          <FormControlLabel
-                            key={quarter.value}
-                            control={
-                              <Checkbox
-                                size="small"
-                                checked={(selectedQuarters[serviceKey] || []).includes(quarter.value)}
-                                onChange={(e) => {
-                                  const currentQuarters = selectedQuarters[serviceKey] || [];
-                                  let newQuarters;
-                                  
-                                  if (e.target.checked) {
-                                    newQuarters = [...currentQuarters, quarter.value];
-                                  } else {
-                                    newQuarters = currentQuarters.filter(q => q !== quarter.value);
-                                  }
-                                  
-                                  setSelectedQuarters(prev => ({
-                                    ...prev,
-                                    [serviceKey]: newQuarters
-                                  }));
-                                  
-                                  // Update years based on selected quarters
-                                  const yearsFromQuarters = [...new Set(
-                                    newQuarters.map(q => q.split('-')[0])
-                                  )];
-                                  
-                                  setSelectedYears(prev => ({
-                                    ...prev,
-                                    [serviceKey]: yearsFromQuarters
-                                  }));
-                                }}
-                                color="primary"
-                              />
-                            }
-                            label={quarter.label}
-                            sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-                          />
-                        ))}
-                      </Box>
-                    </Grid>
-                  </Grid>
+                              {isYearSelected && selectedQuartersForYear > 0 && (
+                                <Chip 
+                                  label={`${selectedQuartersForYear}Q`}
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                  sx={{
+                                    fontSize: '0.7rem',
+                                    height: 20,
+                                    minWidth: 32
+                                  }}
+                                />
+                              )}
+                            </Box>
+                          </Box>
+                          
+                          {/* Compact Quarter Selection - only show if year is selected and quarters are needed */}
+                          {isYearSelected && yearQuarters.length > 0 && !requiresYearOnly && (
+                            <Box sx={{ 
+                              ml: 2, 
+                              mt: 0.5,
+                              p: 1,
+                              backgroundColor: 'white',
+                              borderRadius: 1,
+                              border: '1px solid #e8f4fd'
+                            }}>
+                              <Typography 
+                                variant="caption" 
+                                color="text.secondary" 
+                                sx={{ mb: 0.5, display: 'block', fontSize: '0.7rem' }}
+                              >
+                                Quarters:
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                {yearQuarters.map((quarter) => {
+                                  const isQuarterSelected = (selectedQuarters[serviceKey] || []).includes(quarter.value);
+                                  return (
+                                    <Chip
+                                      key={quarter.value}
+                                      label={quarter.quarter}
+                                      size="small"
+                                      clickable
+                                      color={isQuarterSelected ? 'primary' : 'default'}
+                                      variant={isQuarterSelected ? 'filled' : 'outlined'}
+                                      onClick={() => {
+                                        const currentQuarters = selectedQuarters[serviceKey] || [];
+                                        let newQuarters;
+                                        
+                                        if (isQuarterSelected) {
+                                          newQuarters = currentQuarters.filter(q => q !== quarter.value);
+                                        } else {
+                                          newQuarters = [...currentQuarters, quarter.value];
+                                        }
+                                        
+                                        setSelectedQuarters(prev => ({
+                                          ...prev,
+                                          [serviceKey]: newQuarters
+                                        }));
+                                      }}
+                                      sx={{
+                                        fontSize: '0.7rem',
+                                        height: 24,
+                                        minWidth: 32,
+                                        '& .MuiChip-label': {
+                                          px: 1
+                                        }
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Box>
 
                   {(selectedYears[serviceKey]?.length > 0 || selectedQuarters[serviceKey]?.length > 0) && (
-                    <Alert severity="success" sx={{ mt: 2 }}>
+                    <Alert 
+                      severity="info" 
+                      sx={{ 
+                        mt: 1.5,
+                        py: 0.5
+                      }}
+                    >
                       <Typography variant="caption">
-                        {selectedYears[serviceKey]?.length || 0} year(s) and {selectedQuarters[serviceKey]?.length || 0} quarter(s) selected
+                        Selected: {selectedYears[serviceKey]?.length || 0} year(s), {selectedQuarters[serviceKey]?.length || 0} quarter(s)
                       </Typography>
                     </Alert>
                   )}

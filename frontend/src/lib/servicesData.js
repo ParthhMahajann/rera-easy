@@ -390,7 +390,7 @@ export const SERVICES = {
     },
     {
       id: "service-addon-4",
-      name: "Form 1",
+      name: "Architect's Certificate",
       origin: "Add ons",
       requiresYearQuarter: true,
       subServices: [
@@ -400,7 +400,7 @@ export const SERVICES = {
 },
 {
       id: "service-addon-5",
-      name: "Form 2",
+      name: "Engineer's Certificate",
       origin: "Add ons",
       requiresYearQuarter: true,
       subServices: [
@@ -410,7 +410,7 @@ export const SERVICES = {
 },
 {
       id: "service-addon-6",
-      name: "Form 3",
+      name: "Chartered Accountant's Certificate ",
       origin: "Add ons",
       requiresYearQuarter: true,
       subServices: [
@@ -420,9 +420,9 @@ export const SERVICES = {
 },
 {
       id: "service-addon-7",
-      name: "Form 5",
+      name: "Annual Return/Report",
       origin: "Add ons",
-      requiresYearQuarter: true,
+      requiresYearOnly: true,
       subServices: [
         { id: "subservice-addon-7-1", name: "Drafting assistance of Form 5 (Annual Report on Statement of Account) as per the Registers, Books & Documents" },
         { id: "subservice-addon-7-2", name: "Certification of Form 5" },
@@ -536,47 +536,38 @@ export function getServicesForHeader(header) {
 export function getAvailableHeaders(selectedHeaders) {
   return HEADERS.map(h => h.name).filter(header => !selectedHeaders.includes(header));
 }
-// Year and Quarter options for forms
-export const YEAR_OPTIONS = [
-  { value: "2023", label: "2023" },
-  { value: "2024", label: "2024" },
-  { value: "2025", label: "2025" },
-  { value: "2026", label: "2026" },
-  { value: "2027", label: "2027" }
-];
+// Year and Quarter options for forms - dynamically generated from 2017 to current year
+function generateYearOptions() {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  
+  for (let year = 2017; year <= currentYear; year++) {
+    years.push({ value: year.toString(), label: year.toString() });
+  }
+  
+  return years;
+}
 
-export const QUARTER_OPTIONS = {
-  "2023": [
-    { value: "2023-Q1", label: "Q1 2023", year: "2023", quarter: "Q1" },
-    { value: "2023-Q2", label: "Q2 2023", year: "2023", quarter: "Q2" },
-    { value: "2023-Q3", label: "Q3 2023", year: "2023", quarter: "Q3" },
-    { value: "2023-Q4", label: "Q4 2023", year: "2023", quarter: "Q4" }
-  ],
-  "2024": [
-    { value: "2024-Q1", label: "Q1 2024", year: "2024", quarter: "Q1" },
-    { value: "2024-Q2", label: "Q2 2024", year: "2024", quarter: "Q2" },
-    { value: "2024-Q3", label: "Q3 2024", year: "2024", quarter: "Q3" },
-    { value: "2024-Q4", label: "Q4 2024", year: "2024", quarter: "Q4" }
-  ],
-  "2025": [
-    { value: "2025-Q1", label: "Q1 2025", year: "2025", quarter: "Q1" },
-    { value: "2025-Q2", label: "Q2 2025", year: "2025", quarter: "Q2" },
-    { value: "2025-Q3", label: "Q3 2025", year: "2025", quarter: "Q3" },
-    { value: "2025-Q4", label: "Q4 2025", year: "2025", quarter: "Q4" }
-  ],
-  "2026": [
-    { value: "2026-Q1", label: "Q1 2026", year: "2026", quarter: "Q1" },
-    { value: "2026-Q2", label: "Q2 2026", year: "2026", quarter: "Q2" },
-    { value: "2026-Q3", label: "Q3 2026", year: "2026", quarter: "Q3" },
-    { value: "2026-Q4", label: "Q4 2026", year: "2026", quarter: "Q4" }
-  ],
-  "2027": [
-    { value: "2027-Q1", label: "Q1 2027", year: "2027", quarter: "Q1" },
-    { value: "2027-Q2", label: "Q2 2027", year: "2027", quarter: "Q2" },
-    { value: "2027-Q3", label: "Q3 2027", year: "2027", quarter: "Q3" },
-    { value: "2027-Q4", label: "Q4 2027", year: "2027", quarter: "Q4" }
-  ]
-};
+export const YEAR_OPTIONS = generateYearOptions();
+
+function generateQuarterOptions() {
+  const currentYear = new Date().getFullYear();
+  const quarterOptions = {};
+  
+  for (let year = 2017; year <= currentYear; year++) {
+    const yearStr = year.toString();
+    quarterOptions[yearStr] = [
+      { value: `${yearStr}-Q1`, label: `Q1 ${yearStr}`, year: yearStr, quarter: "Q1" },
+      { value: `${yearStr}-Q2`, label: `Q2 ${yearStr}`, year: yearStr, quarter: "Q2" },
+      { value: `${yearStr}-Q3`, label: `Q3 ${yearStr}`, year: yearStr, quarter: "Q3" },
+      { value: `${yearStr}-Q4`, label: `Q4 ${yearStr}`, year: yearStr, quarter: "Q4" }
+    ];
+  }
+  
+  return quarterOptions;
+}
+
+export const QUARTER_OPTIONS = generateQuarterOptions();
 
 export function getAllQuartersForYears(years) {
   const quarters = [];
