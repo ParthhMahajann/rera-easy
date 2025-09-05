@@ -34,6 +34,7 @@ import {
 export default function QuotationBuilder({ onComplete, onServicesChange }) {
   const [selectedHeaders, setSelectedHeaders] = useState([]);
   const [selectedServices, setSelectedServices] = useState({});
+  const [selectedSubServices, setSelectedSubServices] = useState({}); // New state for sub-services
   const [currentHeader, setCurrentHeader] = useState(null);
   const [summary, setSummary] = useState({});
   const [allSelectedServices, setAllSelectedServices] = useState([]);
@@ -75,6 +76,35 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
     return addonIds;
   }, [selectedServices]);
 
+  // Helper function to check if all sub-services are selected for a service
+  const areAllSubServicesSelected = useCallback((headerName, serviceId) => {
+    const service = getServicesForHeader(headerName).find(s => s.id === serviceId);
+    if (!service || !service.subServices || service.subServices.length === 0) return true;
+    
+    const serviceKey = `${headerName}-${serviceId}`;
+    const selectedSubs = selectedSubServices[serviceKey] || [];
+    return service.subServices.every(subService => selectedSubs.includes(subService.id));
+  }, [selectedSubServices]);
+
+  // Helper function to check if any sub-services are selected for a service
+  const areAnySubServicesSelected = useCallback((headerName, serviceId) => {
+    const serviceKey = `${headerName}-${serviceId}`;
+    const selectedSubs = selectedSubServices[serviceKey] || [];
+    return selectedSubs.length > 0;
+  }, [selectedSubServices]);
+
+  // Helper function to toggle all sub-services for a service
+  const toggleAllSubServices = useCallback((headerName, serviceId, shouldSelect) => {
+    const service = getServicesForHeader(headerName).find(s => s.id === serviceId);
+    if (!service || !service.subServices) return;
+    
+    const serviceKey = `${headerName}-${serviceId}`;
+    setSelectedSubServices(prev => ({
+      ...prev,
+      [serviceKey]: shouldSelect ? service.subServices.map(sub => sub.id) : []
+    }));
+  }, []);
+
   // Helper function to check if current selection differs from default
   const checkIfRequiresApproval = useCallback(() => {
     for (const headerName of selectedHeaders) {
@@ -106,15 +136,18 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
 
   // Calculate services count and completion percentage
   const updateProgress = useCallback(() => {
-    const totalSelected = Object.values(selectedServices).flat().length;
+    const totalSelectedServices = Object.values(selectedServices).flat().length;
+    const totalSelectedSubServices = Object.values(selectedSubServices).flat().length;
+    const totalSelected = totalSelectedServices + totalSelectedSubServices;
+    
     const completionPercentage = selectedHeaders.length > 0 
-      ? Math.min(100, Math.round((totalSelected / Math.max(selectedHeaders.length * 3, 1)) * 100))
+      ? Math.min(100, Math.round((totalSelected / Math.max(selectedHeaders.length * 5, 1)) * 100))
       : 0;
 
     if (onServicesChange) {
       onServicesChange(totalSelected, completionPercentage);
     }
-  }, [selectedServices, selectedHeaders.length, onServicesChange]);
+  }, [selectedServices, selectedSubServices, selectedHeaders.length, onServicesChange]);
 
   useEffect(() => {
     updateProgress();
@@ -192,14 +225,48 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
               )}
 
               {service.subServices && service.subServices.length > 0 && (
-                <Box sx={{ ml: 4 }}>
-                  <Typography variant="body2" fontWeight={600} color="text.primary" sx={{ mb: 1 }}>
-                    Included Services:
+                <Box sx={{ ml: 4, mt: 2 }}>
+                  <Typography variant="body2" fontWeight={600} color="text.primary" sx={{ mb: 2 }}>
+                    Sub-Services ({service.subServices.length}):
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {service.subServices.slice(0, 3).map(sub => sub.name).join(', ')}
-                    {service.subServices.length > 3 && ` +${service.subServices.length - 3} more`}
-                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 300, overflow: 'auto' }}>
+                    {service.subServices.map((subService) => {
+                      const serviceKey = `${headerName}-${service.id}`;
+                      const selectedSubs = selectedSubServices[serviceKey] || [];
+                      const isSubSelected = selectedSubs.includes(subService.id);
+                      
+                      return (
+                        <FormControlLabel
+                          key={subService.id}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={isSubSelected}
+                              onChange={() => toggleSubService(headerName, service.id, subService.id)}
+                              disabled={isDisabled}
+                              color="primary"
+                            />
+                          }
+                          label={
+                            <Typography 
+                              variant="caption" 
+                              color={isDisabled ? 'text.disabled' : 'text.secondary'}
+                              sx={{ fontSize: '0.75rem', lineHeight: 1.2 }}
+                            >
+                              {subService.name}
+                            </Typography>
+                          }
+                          sx={{ 
+                            alignItems: 'flex-start', 
+                            mr: 0,
+                            '& .MuiFormControlLabel-label': { 
+                              mt: 0.25 
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </Box>
                 </Box>
               )}
 
@@ -342,6 +409,14 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
       headerServices.forEach(service => {
         if (service.category === 'main') {
           mainServicesToSelect.push(service);
+          // Auto-select all sub-services for auto-selected main services
+          if (service.subServices && service.subServices.length > 0) {
+            const serviceKey = `${headerName}-${service.id}`;
+            setSelectedSubServices(prev => ({
+              ...prev,
+              [serviceKey]: service.subServices.map(sub => sub.id)
+            }));
+          }
         }
       });
     }
@@ -356,8 +431,9 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
   const removeHeader = (headerName) => {
     const newHeaders = selectedHeaders.filter(h => h !== headerName);
     const newServices = { ...selectedServices };
+    const newSubServices = { ...selectedSubServices };
     
-    // Clear year/quarter selections for services in this header
+    // Clear year/quarter/sub-service selections for services in this header
     const headerServices = selectedServices[headerName] || [];
     headerServices.forEach(service => {
       const serviceKey = `${headerName}-${service.id}`;
@@ -371,12 +447,15 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
         delete updated[serviceKey];
         return updated;
       });
+      // Clear sub-service selections
+      delete newSubServices[serviceKey];
     });
     
     delete newServices[headerName];
-
+    
     setSelectedHeaders(newHeaders);
     setSelectedServices(newServices);
+    setSelectedSubServices(newSubServices);
 
     if (currentHeader === headerName) {
       setCurrentHeader(newHeaders.length > 0 ? newHeaders[0] : null);
@@ -413,8 +492,12 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
         delete updated[serviceKey];
         return updated;
       });
+      // Clear all sub-services when parent service is deselected
+      toggleAllSubServices(headerName, service.id, false);
     } else {
       newServices = [...headerServices, service];
+      // Auto-select all sub-services when parent service is selected
+      toggleAllSubServices(headerName, service.id, true);
     }
 
     setSelectedServices({
@@ -423,13 +506,60 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
     });
   };
 
+  // Function to toggle individual sub-service
+  const toggleSubService = (headerName, serviceId, subServiceId) => {
+    const serviceKey = `${headerName}-${serviceId}`;
+    const currentSubServices = selectedSubServices[serviceKey] || [];
+    
+    let newSubServices;
+    if (currentSubServices.includes(subServiceId)) {
+      newSubServices = currentSubServices.filter(id => id !== subServiceId);
+    } else {
+      newSubServices = [...currentSubServices, subServiceId];
+    }
+    
+    setSelectedSubServices(prev => ({
+      ...prev,
+      [serviceKey]: newSubServices
+    }));
+
+    // Check if parent service should be selected/deselected based on sub-service selection
+    const headerServices = selectedServices[headerName] || [];
+    const isParentSelected = headerServices.some(s => s.id === serviceId);
+    const service = getServicesForHeader(headerName).find(s => s.id === serviceId);
+    
+    if (newSubServices.length === 0 && isParentSelected) {
+      // Deselect parent if no sub-services are selected
+      const newServices = headerServices.filter(s => s.id !== serviceId);
+      setSelectedServices({
+        ...selectedServices,
+        [headerName]: newServices
+      });
+    } else if (newSubServices.length > 0 && !isParentSelected) {
+      // Select parent if at least one sub-service is selected
+      const newServices = [...headerServices, service];
+      setSelectedServices({
+        ...selectedServices,
+        [headerName]: newServices
+      });
+    }
+  };
+
   const handleComplete = () => {
     const result = selectedHeaders.map(headerName => ({
       name: headerName,
       services: selectedServices[headerName].map(service => {
         const serviceKey = `${headerName}-${service.id}`;
+        const selectedSubs = selectedSubServices[serviceKey] || [];
+        
+        // Filter sub-services to only include selected ones
+        const selectedSubServicesList = service.subServices 
+          ? service.subServices.filter(sub => selectedSubs.includes(sub.id))
+          : [];
+        
         return {
           ...service,
+          selectedSubServices: selectedSubServicesList,
           selectedYears: selectedYears[serviceKey] || [],
           selectedQuarters: selectedQuarters[serviceKey] || []
         };
@@ -576,7 +706,7 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
                 Ready to proceed?
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {Object.values(selectedServices).flat().length} services selected across {selectedHeaders.length} categories
+                {Object.values(selectedServices).flat().length} services and {Object.values(selectedSubServices).flat().length} sub-services selected across {selectedHeaders.length} categories
               </Typography>
               {requiresApproval && (
                 <Alert severity="info" sx={{ mt: 2, maxWidth: 400 }}>
