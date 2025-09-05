@@ -507,8 +507,26 @@ class ServicesDataManager:
             services_to_process = []
             
             if self.is_package_header(header_name):
-                # For packages, get all included services
-                services_to_process = self.get_services_for_package(header_name)
+                # For packages, use the single package price from JSON instead of expanding services
+                package_price = self._find_pricing_from_array(category, region, plot_area, header_name, pricing_data)
+                
+                # Get the services for display purposes but use the single package price
+                package_services = self.get_services_for_package(header_name)
+                
+                # Create a single service entry representing the entire package
+                header_services.append({
+                    "id": f"package-{header_name.lower().replace(' ', '-')}",
+                    "name": header_name,
+                    "baseAmount": package_price,
+                    "totalAmount": round(package_price, 2),
+                    "subServices": []
+                })
+                
+                header_total += package_price
+                total_services += 1
+                
+                # Skip the normal service processing for packages
+                services_to_process = []
             else:
                 # For regular and customized headers, use provided services
                 services_to_process = header_data.get('services', [])
