@@ -21,6 +21,11 @@ export async function fetchQuotations(params = {}) {
   return response.data?.data || [];
 }
 
+export async function fetchQuotation(id) {
+  const response = await api.get(`/quotations/${id}`);
+  return response.data?.data || response.data;
+}
+
 export async function createQuotation(payload) {
   const response = await api.post('/quotations', payload);
   return response.data?.data;

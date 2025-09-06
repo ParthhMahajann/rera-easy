@@ -9,6 +9,7 @@ import {
   QUARTER_OPTIONS,
   getAllQuartersForYears
 } from "../lib/servicesData";
+import { useQuotation } from "../context/QuotationContext";
 import {
   Box,
   Button,
@@ -31,7 +32,11 @@ import {
   DateRange as DateRangeIcon
 } from "@mui/icons-material";
 
-export default function QuotationBuilder({ onComplete, onServicesChange }) {
+export default function QuotationBuilder({ onComplete, onServicesChange, quotationData }) {
+  // Use context for header and services data
+  const { selectedHeaders: contextHeaders } = useQuotation();
+  
+  // Local state for UI-specific data
   const [selectedHeaders, setSelectedHeaders] = useState([]);
   const [selectedServices, setSelectedServices] = useState({});
   const [selectedSubServices, setSelectedSubServices] = useState({}); // New state for sub-services
@@ -45,6 +50,7 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
   const [globallySelectedAddons, setGloballySelectedAddons] = useState(new Set());
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [originalPackageSelections, setOriginalPackageSelections] = useState({});
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Helper function to get default services for a header (what should be pre-selected)
   const getDefaultServicesForHeader = useCallback((headerName) => {
@@ -148,6 +154,67 @@ export default function QuotationBuilder({ onComplete, onServicesChange }) {
       onServicesChange(totalSelected, completionPercentage);
     }
   }, [selectedServices, selectedSubServices, selectedHeaders.length, onServicesChange]);
+
+  // Load data from context when it's available
+  useEffect(() => {
+    if (contextHeaders && contextHeaders.length > 0 && !dataLoaded) {
+      console.log('Loading data from context:', contextHeaders);
+      
+      // Convert context data back to component state
+      const headerNames = contextHeaders.map(h => h.name);
+      const servicesMap = {};
+      const subServicesMap = {};
+      const yearsMap = {};
+      const quartersMap = {};
+      
+      contextHeaders.forEach(header => {
+        if (header.services && header.services.length > 0) {
+          // Get full service information from servicesData to merge with context data
+          const fullHeaderServices = getServicesForHeader(header.name);
+          
+          servicesMap[header.name] = header.services.map(contextService => {
+            // Find the full service data to get complete information
+            const fullService = fullHeaderServices.find(fs => fs.id === contextService.id) || {
+              id: contextService.id,
+              name: contextService.name,
+              label: contextService.label || contextService.name,
+              category: 'main',
+              subServices: []
+            };
+            
+            // Handle sub-services - convert object back to selection array
+            if (contextService.subServices && Object.keys(contextService.subServices).length > 0) {
+              const serviceKey = `${header.name}-${contextService.id}`;
+              subServicesMap[serviceKey] = Object.keys(contextService.subServices);
+            }
+            
+            // Handle year/quarter selections
+            if (contextService.selectedYears && contextService.selectedYears.length > 0) {
+              const serviceKey = `${header.name}-${contextService.id}`;
+              yearsMap[serviceKey] = contextService.selectedYears;
+            }
+            
+            if (contextService.selectedQuarters && contextService.selectedQuarters.length > 0) {
+              const serviceKey = `${header.name}-${contextService.id}`;
+              quartersMap[serviceKey] = contextService.selectedQuarters;
+            }
+            
+            return fullService;
+          });
+        }
+      });
+      
+      console.log('Loading state:', { headerNames, servicesMap, subServicesMap, yearsMap, quartersMap });
+      
+      setSelectedHeaders(headerNames);
+      setSelectedServices(servicesMap);
+      setSelectedSubServices(subServicesMap);
+      setSelectedYears(yearsMap);
+      setSelectedQuarters(quartersMap);
+      setCurrentHeader(headerNames[0] || null);
+      setDataLoaded(true);
+    }
+  }, [contextHeaders, dataLoaded]);
 
   useEffect(() => {
     updateProgress();
