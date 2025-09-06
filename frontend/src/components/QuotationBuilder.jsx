@@ -24,7 +24,12 @@ import {
   FormControlLabel,
   Paper,
   Alert,
-  Tooltip
+  Tooltip,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -45,6 +50,9 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
   const [allSelectedServices, setAllSelectedServices] = useState([]);
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [customHeaderName, setCustomHeaderName] = useState("");
+  const [customHeaderNames, setCustomHeaderNames] = useState({}); // Map header ID to custom name
+  const [showCustomHeaderDialog, setShowCustomHeaderDialog] = useState(false);
+  const [pendingCustomHeader, setPendingCustomHeader] = useState("");
   const [selectedYears, setSelectedYears] = useState({});
   const [selectedQuarters, setSelectedQuarters] = useState({});
   const [globallySelectedAddons, setGloballySelectedAddons] = useState(new Set());
@@ -114,9 +122,9 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
   // Helper function to check if current selection differs from default
   const checkIfRequiresApproval = useCallback(() => {
     for (const headerName of selectedHeaders) {
-      if (isPackageHeader(headerName) || headerName === 'Customized Header') {
+      if (isPackageHeader(headerName) || headerName === 'Customized Header' || isCustomHeader(headerName)) {
         const currentServices = selectedServices[headerName] || [];
-        const defaultServices = getDefaultServicesForHeader(headerName);
+        const defaultServices = getDefaultServicesForHeader(isCustomHeader(headerName) ? 'Customized Header' : headerName);
         
         // Create sets for easier comparison
         const currentServiceIds = new Set(currentServices.map(s => s.id));
@@ -161,18 +169,34 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
       console.log('Loading data from context:', contextHeaders);
       
       // Convert context data back to component state
-      const headerNames = contextHeaders.map(h => h.name);
+      const headerNames = [];
+      const customNames = {};
       const servicesMap = {};
       const subServicesMap = {};
       const yearsMap = {};
       const quartersMap = {};
       
       contextHeaders.forEach(header => {
+        // Handle custom header names
+        if (header.originalName && header.originalName.startsWith('custom-')) {
+          headerNames.push(header.originalName);
+          customNames[header.originalName] = header.name;
+        } else {
+          headerNames.push(header.name);
+        }
+        
         if (header.services && header.services.length > 0) {
-          // Get full service information from servicesData to merge with context data
-          const fullHeaderServices = getServicesForHeader(header.name);
+          // Determine the header key to use
+          const headerKey = header.originalName || header.name;
           
-          servicesMap[header.name] = header.services.map(contextService => {
+          // Get full service information from servicesData to merge with context data  
+          // For custom headers, use 'Customized Header' as the service lookup key
+          const serviceLookupKey = (header.originalName && header.originalName.startsWith('custom-')) 
+            ? 'Customized Header' 
+            : header.name;
+          const fullHeaderServices = getServicesForHeader(serviceLookupKey);
+          
+          servicesMap[headerKey] = header.services.map(contextService => {
             // Find the full service data to get complete information
             const fullService = fullHeaderServices.find(fs => fs.id === contextService.id) || {
               id: contextService.id,
@@ -184,18 +208,18 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
             
             // Handle sub-services - convert object back to selection array
             if (contextService.subServices && Object.keys(contextService.subServices).length > 0) {
-              const serviceKey = `${header.name}-${contextService.id}`;
+              const serviceKey = `${headerKey}-${contextService.id}`;
               subServicesMap[serviceKey] = Object.keys(contextService.subServices);
             }
             
             // Handle year/quarter selections
             if (contextService.selectedYears && contextService.selectedYears.length > 0) {
-              const serviceKey = `${header.name}-${contextService.id}`;
+              const serviceKey = `${headerKey}-${contextService.id}`;
               yearsMap[serviceKey] = contextService.selectedYears;
             }
             
             if (contextService.selectedQuarters && contextService.selectedQuarters.length > 0) {
-              const serviceKey = `${header.name}-${contextService.id}`;
+              const serviceKey = `${headerKey}-${contextService.id}`;
               quartersMap[serviceKey] = contextService.selectedQuarters;
             }
             
@@ -204,13 +228,14 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
         }
       });
       
-      console.log('Loading state:', { headerNames, servicesMap, subServicesMap, yearsMap, quartersMap });
+      console.log('Loading state:', { headerNames, servicesMap, subServicesMap, yearsMap, quartersMap, customNames });
       
       setSelectedHeaders(headerNames);
       setSelectedServices(servicesMap);
       setSelectedSubServices(subServicesMap);
       setSelectedYears(yearsMap);
       setSelectedQuarters(quartersMap);
+      setCustomHeaderNames(customNames);
       setCurrentHeader(headerNames[0] || null);
       setDataLoaded(true);
     }
@@ -563,6 +588,12 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
   };
 
   const addHeader = (headerName) => {
+    if (headerName === 'Customized Header') {
+      // Show dialog for custom header name
+      setShowCustomHeaderDialog(true);
+      return;
+    }
+    
     if (selectedHeaders.includes(headerName)) return;
 
     const newHeaders = [...selectedHeaders, headerName];
@@ -596,6 +627,51 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
     setCurrentHeader(headerName);
   };
 
+  const handleCustomHeaderConfirm = () => {
+    if (!pendingCustomHeader.trim()) return;
+    
+    const customHeaderId = `custom-${Date.now()}`;
+    const customName = pendingCustomHeader.trim();
+    
+    // Add the custom header to selected headers with a unique ID
+    const newHeaders = [...selectedHeaders, customHeaderId];
+    setSelectedHeaders(newHeaders);
+    
+    // Store the custom name mapping
+    setCustomHeaderNames(prev => ({
+      ...prev,
+      [customHeaderId]: customName
+    }));
+    
+    // Initialize services for custom header (empty by default)
+    setSelectedServices({ 
+      ...selectedServices, 
+      [customHeaderId]: [] 
+    });
+    
+    setCurrentHeader(customHeaderId);
+    setShowCustomHeaderDialog(false);
+    setPendingCustomHeader("");
+  };
+
+  const handleCustomHeaderCancel = () => {
+    setShowCustomHeaderDialog(false);
+    setPendingCustomHeader("");
+  };
+
+  // Helper function to get display name for any header
+  const getHeaderDisplayName = (headerName) => {
+    if (headerName.startsWith('custom-')) {
+      return customHeaderNames[headerName] || 'Custom Header';
+    }
+    return headerName;
+  };
+
+  // Helper function to check if a header is custom
+  const isCustomHeader = (headerName) => {
+    return headerName.startsWith('custom-');
+  };
+
   const removeHeader = (headerName) => {
     const newHeaders = selectedHeaders.filter(h => h !== headerName);
     const newServices = { ...selectedServices };
@@ -620,6 +696,15 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
     });
     
     delete newServices[headerName];
+    
+    // If it's a custom header, also remove its name mapping
+    if (isCustomHeader(headerName)) {
+      setCustomHeaderNames(prev => {
+        const updated = { ...prev };
+        delete updated[headerName];
+        return updated;
+      });
+    }
     
     setSelectedHeaders(newHeaders);
     setSelectedServices(newServices);
@@ -715,7 +800,8 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
 
   const handleComplete = () => {
     const result = selectedHeaders.map(headerName => ({
-      name: headerName,
+      name: getHeaderDisplayName(headerName), // Use display name instead of internal ID
+      originalName: headerName, // Keep original ID for internal tracking
       services: selectedServices[headerName].map(service => {
         const serviceKey = `${headerName}-${service.id}`;
         const selectedSubs = selectedSubServices[serviceKey] || [];
@@ -737,14 +823,25 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
     // Include approval requirement in the result
     const resultWithApproval = {
       headers: result,
-      requiresApproval: requiresApproval
+      requiresApproval: requiresApproval,
+      customHeaderNames: customHeaderNames // Include custom header names for saving
     };
 
     onComplete(resultWithApproval);
   };
 
   const availableHeaders = getAvailableHeaders(selectedHeaders);
-  const currentServices = currentHeader ? getServicesForHeader(currentHeader) : [];
+  
+  // Handle service retrieval for custom headers
+  let currentServices = [];
+  if (currentHeader) {
+    if (isCustomHeader(currentHeader)) {
+      currentServices = getServicesForHeader('Customized Header');
+    } else {
+      currentServices = getServicesForHeader(currentHeader);
+    }
+  }
+  
   const mainServices = currentServices.filter(s => s.category === 'main');
   const addonServices = currentServices.filter(s => s.category === 'addon');
 
@@ -787,7 +884,7 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
             {selectedHeaders.map(header => (
               <Chip
                 key={header}
-                label={header}
+                label={getHeaderDisplayName(header)}
                 onDelete={() => removeHeader(header)}
                 variant={currentHeader === header ? "filled" : "outlined"}
                 color={currentHeader === header ? "primary" : "default"}
@@ -803,7 +900,7 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
       {currentHeader && (
         <Box sx={{ p: 3 }}>
           <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
-            Configure Services for: {currentHeader}
+            Configure Services for: {getHeaderDisplayName(currentHeader)}
           </Typography>
 
           {/* Main Services */}
@@ -895,6 +992,48 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
           </Stack>
         </Box>
       )}
+
+      {/* Custom Header Name Dialog */}
+      <Dialog open={showCustomHeaderDialog} onClose={handleCustomHeaderCancel} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h6" fontWeight={600}>
+            Create Custom Header
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Enter a name for your custom service category
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pb: 2 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Custom Header Name"
+            value={pendingCustomHeader}
+            onChange={(e) => setPendingCustomHeader(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && pendingCustomHeader.trim()) {
+                handleCustomHeaderConfirm();
+              }
+            }}
+            placeholder="e.g., Special Services, Additional Compliance"
+            sx={{ mt: 1 }}
+            inputProps={{ maxLength: 50 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={handleCustomHeaderCancel} color="inherit">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCustomHeaderConfirm} 
+            variant="contained" 
+            disabled={!pendingCustomHeader.trim()}
+            sx={{ textTransform: 'none' }}
+          >
+            Create Header
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 }

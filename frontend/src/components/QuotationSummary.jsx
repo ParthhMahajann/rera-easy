@@ -12,36 +12,22 @@ import {
   TableHead,
   TableRow,
   Divider,
-  Grid,
-  Card,
-  CardContent,
   CircularProgress,
   Alert,
-  Chip,
-  Container,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon
+  Container
 } from '@mui/material';
 import {
   Download as DownloadIcon,
-  CheckCircle as CheckCircleIcon,
-  Business as BusinessIcon,
-  LocationOn as LocationIcon,
-  CalendarToday as CalendarIcon,
-  AccountBalance as AccountBalanceIcon,
-  Assignment as AssignmentIcon
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 import { SERVICES } from '../lib/servicesData';
 
 /**
- * QuotationSummary.jsx - Fixed Version with Proper Subservice Loading
- * - Properly loads and displays actual subservice names from servicesData.js
- * - Uses Material-UI for PDF-like preview layout
- * - Removes edit pricing and back to dashboard buttons
- * - Changes "create new quotation" to "complete quotation" with dashboard redirect
- * - Shows individual pricing next to service names, total at bottom
+ * QuotationSummary.jsx - Clean Layout Design
+ * - Simple three-column layout: Service | Sub-services | Price
+ * - Header name as page title
+ * - Selected terms and conditions at bottom
+ * - RERA Easy branding
  */
 
 const slugify = (str = '') => String(str)
@@ -86,6 +72,77 @@ const findServiceByName = (serviceName) => {
     }
   }
   return null;
+};
+
+const mergePricingData = (headers, pricingBreakdown) => {
+  if (!pricingBreakdown || !Array.isArray(pricingBreakdown)) {
+    return headers;
+  }
+  
+  // Create maps for both service names and header names to prices
+  const servicePriceMap = new Map();
+  const headerPriceMap = new Map();
+  
+  pricingBreakdown.forEach(breakdown => {
+    // Check if breakdown has a header name and total
+    if (breakdown.name && (breakdown.totalAmount || breakdown.total)) {
+      const headerPrice = breakdown.totalAmount || breakdown.total || 0;
+      headerPriceMap.set(breakdown.name.trim(), headerPrice);
+      console.log(`Found header price: ${breakdown.name} -> ${headerPrice}`);
+    }
+    
+    if (breakdown.services && Array.isArray(breakdown.services)) {
+      breakdown.services.forEach(service => {
+        if (service.name) {
+          const price = service.totalAmount || service.price || service.amount || service.cost || 0;
+          servicePriceMap.set(service.name.trim(), price);
+          
+          // Also try with normalized name (remove extra spaces, case insensitive)
+          const normalizedName = service.name.replace(/\s+/g, ' ').trim();
+          servicePriceMap.set(normalizedName, price);
+          console.log(`Found service price: ${service.name} -> ${price}`);
+        }
+      });
+    }
+  });
+  
+  console.log('Service Price Map:', Array.from(servicePriceMap.entries()));
+  console.log('Header Price Map:', Array.from(headerPriceMap.entries()));
+  
+  // Apply prices to headers
+  return headers.map(header => {
+    // Check if the entire header is a package (like Package B)
+    const headerName = header.name?.trim();
+    let headerTotalPrice = headerPriceMap.get(headerName) || 0;
+    
+    const updatedServices = header.services?.map(service => {
+      let price = service.price || service.totalAmount || service.amount || service.cost || 0;
+      
+      // If no price found, try to get from breakdown
+      if (price === 0) {
+        price = servicePriceMap.get(service.name) || 
+                servicePriceMap.get(service.name?.trim()) ||
+                servicePriceMap.get(service.name?.replace(/\s+/g, ' ').trim()) || 0;
+      }
+      
+      // For packages, if individual service has no price but header has total, use header price
+      if (price === 0 && headerTotalPrice > 0 && header.services?.length === 1) {
+        price = headerTotalPrice;
+      }
+      
+      console.log(`Mapping service '${service.name}' in header '${headerName}' -> Price: ${price}`);
+      
+      return {
+        ...service,
+        price: price
+      };
+    }) || [];
+    
+    return {
+      ...header,
+      services: updatedServices
+    };
+  });
 };
 
 const normalizeQuotation = (raw) => {
@@ -153,6 +210,11 @@ const normalizeQuotation = (raw) => {
       services: normalizedServices
     };
   });
+  
+  // Apply pricing data from breakdown if available
+  if (raw.pricingBreakdown) {
+    normalized.headers = mergePricingData(normalized.headers, raw.pricingBreakdown);
+  }
 
   return normalized;
 };
@@ -163,53 +225,7 @@ const QuotationSummary = () => {
   const [quotation, setQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  // Excel-like table styles with white/blue theme
-  const excelTableStyles = {
-    '& .MuiTableContainer-root': {
-      border: '1px solid #e3f2fd',
-      borderRadius: '8px',
-      boxShadow: '0 2px 8px rgba(25,118,210,0.1)'
-    },
-    '& .MuiTable-root': {
-      borderCollapse: 'separate',
-      borderSpacing: 0,
-    },
-    '& .MuiTableHead-root': {
-      '& .MuiTableCell-root': {
-        backgroundColor: '#1976d2',
-        color: 'white',
-        borderRight: '1px solid rgba(255,255,255,0.2)',
-        borderBottom: 'none',
-        padding: '12px 16px',
-        fontSize: '0.9rem',
-        fontWeight: 600,
-        '&:last-child': {
-          borderRight: 'none',
-        },
-      },
-    },
-    '& .MuiTableBody-root': {
-      '& .MuiTableRow-root': {
-        '&:nth-of-type(even)': {
-          backgroundColor: '#f8faff',
-        },
-        '&:hover': {
-          backgroundColor: '#e3f2fd',
-        },
-        '& .MuiTableCell-root': {
-          borderRight: '1px solid #e3f2fd',
-          borderBottom: '1px solid #e3f2fd',
-          padding: '10px 16px',
-          fontSize: '0.85rem',
-          color: '#1a1a1a',
-          '&:last-child': {
-            borderRight: 'none',
-          },
-        },
-      },
-    },
-  };
+  const [acceptedTerms, setAcceptedTerms] = useState([]);
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -223,7 +239,138 @@ const QuotationSummary = () => {
         
         const normalized = normalizeQuotation(rawData);
         console.log('Normalized quotation with actual subservices:', normalized);
+        console.log('Raw quotation data:', rawData);
+        console.log('Raw pricing breakdown:', rawData.pricingBreakdown);
+        console.log('Raw total amount:', rawData.totalAmount);
+        
+        // Try to get pricing from pricingBreakdown if service prices are missing
+        if (rawData.pricingBreakdown && Array.isArray(rawData.pricingBreakdown)) {
+          console.log('Found pricing breakdown, attempting to match with services...');
+          
+          rawData.pricingBreakdown.forEach(breakdown => {
+            console.log('Breakdown item:', breakdown);
+            if (breakdown.services) {
+              breakdown.services.forEach(pricedService => {
+                console.log('Priced service:', pricedService.name, pricedService.totalAmount);
+              });
+            }
+          });
+        }
+        
+        // Debug pricing data
+        if (normalized.headers) {
+          normalized.headers.forEach(header => {
+            console.log(`Header: ${header.name}`);
+            if (header.services) {
+              header.services.forEach(service => {
+                console.log(`  Service: ${service.name}, Price: ${service.price}`);
+              });
+            }
+          });
+        }
+        
         setQuotation(normalized);
+        
+        // Extract accepted terms from the quotation data
+        const allAcceptedTerms = [];
+        const termsCategories = new Map();
+        
+        // Function to generate dynamic terms based on quotation data
+        const generateDynamicTerms = (quotationData) => {
+          const dynamicTerms = [];
+          
+          if (quotationData) {
+            // 1. Quotation validity term
+            const validity = quotationData.validity || quotationData.validityPeriod;
+            if (validity) {
+              const validityString = validity.toString().toLowerCase();
+              let validityDays = 0;
+              
+              if (validityString.includes('7')) {
+                validityDays = 7;
+              } else if (validityString.includes('15')) {
+                validityDays = 15;
+              } else if (validityString.includes('30')) {
+                validityDays = 30;
+              } else {
+                const matches = validityString.match(/\d+/);
+                if (matches) {
+                  validityDays = parseInt(matches[0]);
+                }
+              }
+              
+              if (validityDays > 0) {
+                const baseDate = quotationData.createdAt ? new Date(quotationData.createdAt) : new Date();
+                const validUntilDate = new Date(baseDate.getTime() + validityDays * 24 * 60 * 60 * 1000);
+                
+                const formattedDate = validUntilDate.toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                });
+                
+                dynamicTerms.push(`The quotation is valid upto ${formattedDate}.`);
+              }
+            }
+            
+            // 2. Advance payment term
+            const paymentSchedule = quotationData.paymentSchedule || quotationData.payment_schedule;
+            if (paymentSchedule) {
+              dynamicTerms.push(`${paymentSchedule} of the total amount must be paid in advance before commencement of work/service.`);
+            }
+          }
+          
+          return dynamicTerms;
+        };
+        
+        // Define all possible terms and conditions
+        const termsData = {
+          "General T&C": [
+            ...generateDynamicTerms(rawData),
+            "The above quotation is subject to this project only.",
+            "The prices mentioned above are in particular to One Project per year.",
+            "The services outlined above are included within the project scope. Any additional services not specified are excluded from this scope.",
+            "The prices mentioned above are applicable to One Project only for the duration of the services obtained.",
+            "The prices mentioned above DO NOT include Government Fees.",
+            "The prices mentioned above DO NOT include Edit Fees.",
+            "*18% GST Applicable on above mentioned charges.",
+            "The prices listed above do not include any applicable statutory taxes.",
+            "Any and all services not mentioned in the above scope of services are not applicable",
+            "All Out-of-pocket expenses incurred for completion of the work shall be re-imbursed to RERA Easy"
+          ],
+          "Package A,B,C": [
+            "Payment is due at the initiation of services, followed by annual payments thereafter.",
+            "Any kind of drafting of legal documents or contracts are not applicable.",
+            "The quoted fee covers annual MahaRERA compliance services, with billing on a Yearly basis for convenience and predictable financial planning.",
+            "Invoices will be generated at a predetermined interval for each year in advance.",
+            "The initial invoice will be issued from the date of issuance or a start date as specified in the Work Order."
+          ],
+          "Package D": [
+            "All Out-of-pocket expenses incurred for the explicit purpose of Commuting, Refreshment meals of RERA Easy's personnel shall be re-imbursed to RERA Easy, subject to submission of relevant invoices, bills and records submitted."
+          ]
+        };
+        
+        // Process applicable terms categories
+        if (rawData.applicableTerms && Array.isArray(rawData.applicableTerms)) {
+          rawData.applicableTerms.forEach(categoryName => {
+            if (termsData[categoryName]) {
+              termsCategories.set(categoryName, termsData[categoryName]);
+              allAcceptedTerms.push(...termsData[categoryName]);
+            }
+          });
+        }
+        
+        // Add custom terms
+        if (rawData.customTerms && Array.isArray(rawData.customTerms)) {
+          const filteredCustomTerms = rawData.customTerms.filter(term => term && term.trim());
+          if (filteredCustomTerms.length > 0) {
+            termsCategories.set('Custom Terms', filteredCustomTerms);
+            allAcceptedTerms.push(...filteredCustomTerms);
+          }
+        }
+        
+        console.log('Extracted terms:', allAcceptedTerms);
+        setAcceptedTerms(allAcceptedTerms);
       } catch (err) {
         console.error('Error fetching quotation:', err);
         setError(err.message || 'Unknown error');
@@ -295,6 +442,12 @@ const QuotationSummary = () => {
     }, 0);
   };
 
+  const getPageTitle = () => {
+    if (!quotation?.headers || quotation.headers.length === 0) return 'QUOTATION SUMMARY';
+    // Use the first header name as the page title
+    return quotation.headers[0].name?.toUpperCase() || 'QUOTATION SUMMARY';
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -324,267 +477,541 @@ const QuotationSummary = () => {
   }
 
   return (
-    <Box sx={{ backgroundColor: '#fafbff', minHeight: '100vh' }}>
-      <Container maxWidth="lg" sx={{ py: 2 }}>
-        {/* Main Content */}
-        <Paper elevation={2} sx={{ p: 3, backgroundColor: 'white', borderRadius: 2 }}>
-          {/* Document Header */}
-          <Box sx={{ 
-            textAlign: 'center', 
-            mb: 3, 
-            p: 3,
-            background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
-            color: 'white',
-            borderRadius: 2,
-            boxShadow: '0 4px 12px rgba(25,118,210,0.3)'
-          }}>
-            <Typography variant="h3" fontWeight="bold" gutterBottom sx={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-              QUOTATION SUMMARY
-            </Typography>
+    <Box sx={{ backgroundColor: '#ffffff', minHeight: '100vh', p: 3 }}>
+      <Container maxWidth="lg">
+        {/* Header with Logo and Title */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          mb: 2,
+          borderBottom: '2px solid #000',
+          pb: 1
+        }}>
+          <Typography 
+            variant="h4" 
+            fontWeight="bold" 
+            sx={{ 
+              color: '#000',
+              letterSpacing: '3px',
+              fontSize: '2rem'
+            }}
+          >
+            {getPageTitle()}
+          </Typography>
+          
+          {/* RERA Easy Logo */}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <img 
+              src="/api/logo.jpg" 
+              alt="RERA Easy Logo" 
+              style={{ 
+                height: '60px', 
+                width: 'auto',
+                marginRight: '8px'
+              }} 
+              onError={(e) => {
+                // Fallback if logo doesn't load
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
             <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              mt: 2,
-              flexWrap: 'wrap',
-              gap: 2
+              display: 'none',
+              alignItems: 'center'
             }}>
-              <Typography variant="h6" sx={{ opacity: 0.9 }}>
-                ID: {quotation.id}
-              </Typography>
-              <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                {new Date().toLocaleDateString('en-GB')}
+              <Box sx={{ 
+                backgroundColor: '#FFD700', 
+                p: 1, 
+                borderRadius: 1, 
+                mr: 1,
+                minWidth: 40,
+                minHeight: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="body2" fontWeight="bold" sx={{ color: '#000' }}>
+                  🏢
+                </Typography>
+              </Box>
+              <Typography 
+                variant="h5" 
+                fontWeight="bold" 
+                sx={{ 
+                  color: '#FFD700',
+                  fontFamily: 'serif'
+                }}
+              >
+                RERA<span style={{ color: '#1976d2' }}>Easy</span>
+                <sup style={{ fontSize: '0.6em' }}>®</sup>
               </Typography>
             </Box>
           </Box>
+        </Box>
 
-          {/* Project Details Section */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h5" fontWeight="bold" sx={{ 
-              mb: 2, 
-              display: 'flex', 
-              alignItems: 'center',
-              color: '#1976d2',
-              borderBottom: '2px solid #e3f2fd',
-              pb: 1
-            }}>
-              <BusinessIcon sx={{ mr: 1 }} />
-              Project Information
-            </Typography>
-            
-            {/* Single Unified Project Information Table */}
-            <TableContainer component={Paper} sx={{ ...excelTableStyles }}>
-              <Table>
-                <TableBody>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', width: '20%', backgroundColor: '#e3f2fd' }}>Developer Name</TableCell>
-                    <TableCell sx={{ width: '30%' }}>{quotation.developerName || 'N/A'}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', width: '20%', backgroundColor: '#e3f2fd' }}>Project Name</TableCell>
-                    <TableCell sx={{ width: '30%' }}>{quotation.projectName || 'N/A'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Developer Type</TableCell>
-                    <TableCell>{quotation.developerType || 'N/A'}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Project Region</TableCell>
-                    <TableCell>{quotation.projectRegion || 'N/A'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Promoter Name</TableCell>
-                    <TableCell>{quotation.promoterName || 'N/A'}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Plot Area</TableCell>
-                    <TableCell>{quotation.plotArea || 'N/A'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>RERA Number</TableCell>
-                    <TableCell>{quotation.reraNumber || 'N/A'}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Validity</TableCell>
-                    <TableCell>{quotation.validity || 'N/A'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#e3f2fd' }}>Payment Schedule</TableCell>
-                    <TableCell colSpan={3}>{quotation.paymentSchedule || 'N/A'}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Box>
 
-          {/* Services Section */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h5" fontWeight="bold" sx={{ 
-              mb: 2, 
-              display: 'flex', 
-              alignItems: 'center',
-              color: '#1976d2',
-              borderBottom: '2px solid #e3f2fd',
-              pb: 1
-            }}>
-              <AssignmentIcon sx={{ mr: 1 }} />
-              Selected Services & Pricing
-            </Typography>
+        {/* Main Services Table - All Headers and Services */}
+        <Box sx={{ mt: 3, mb: 3 }}>
+          {quotation.headers && quotation.headers.length > 0 ? (
+            <>
+              {console.log('All headers:', quotation.headers.map(h => h.name))}
+              {quotation.headers.map((header, headerIndex) => {
+                const services = header.services || [];
+                console.log(`Header ${headerIndex}: ${header.name}, Services:`, services.map(s => s.name));
+                
+                // Check if this header is a package with its own total price
+                const isPackage = header.name?.toLowerCase().includes('package');
+                let packageTotalPrice = 0;
+                
+                // Try multiple ways to find package price
+                if (isPackage) {
+                  console.log(`\n=== DEBUG: Package ${header.name} Pricing ===`);
+                  console.log('Raw quotation object:', quotation);
+                  console.log('PricingBreakdown array:', quotation.pricingBreakdown);
+                  console.log('Current header object:', header);
+                  
+                  // Method 1: Direct from pricingBreakdown by exact name match
+                  if (quotation.pricingBreakdown && Array.isArray(quotation.pricingBreakdown)) {
+                    quotation.pricingBreakdown.forEach((breakdown, index) => {
+                      console.log(`Breakdown[${index}]:`, breakdown);
+                      console.log(`  - name: '${breakdown.name}'`);
+                      console.log(`  - totalAmount: ${breakdown.totalAmount}`);
+                      console.log(`  - total: ${breakdown.total}`);
+                    });
+                    
+                    const packageBreakdown = quotation.pricingBreakdown.find(b => {
+                      const breakdownName = (b.name || b.headerName || b.header || '').trim();
+                      const headerName = (header.name || '').trim();
+                      console.log(`Comparing '${breakdownName}' === '${headerName}':`, breakdownName === headerName);
+                      return breakdownName === headerName;
+                    });
+                    
+                    if (packageBreakdown) {
+                      packageTotalPrice = packageBreakdown.totalAmount || 
+                                         packageBreakdown.total || 
+                                         packageBreakdown.amount ||
+                                         packageBreakdown.price || 0;
+                      console.log(`Found package breakdown! Price: ${packageTotalPrice}`);
+                    }
+                  }
+                  
+                  // Method 2: From header object itself  
+                  if (!packageTotalPrice) {
+                    const headerPrice = header.totalAmount || header.total || header.amount || header.price || 0;
+                    if (headerPrice > 0) {
+                      packageTotalPrice = headerPrice;
+                      console.log(`Found price in header object: ${packageTotalPrice}`);
+                    }
+                  }
+                  
+                  // Method 3: Sum of services in package
+                  if (!packageTotalPrice && services.length > 0) {
+                    let sumPrice = 0;
+                    services.forEach(service => {
+                      const servicePrice = service.price || service.totalAmount || service.amount || service.cost || 0;
+                      console.log(`Service '${service.name}' price: ${servicePrice}`);
+                      if (servicePrice > 0) sumPrice += servicePrice;
+                    });
+                    if (sumPrice > 0) {
+                      packageTotalPrice = sumPrice;
+                      console.log(`Calculated from services sum: ${packageTotalPrice}`);
+                    }
+                  }
+                  
+                  // Method 4: Hardcoded fallbacks for known packages
+                  if (!packageTotalPrice) {
+                    const packageFallbacks = {
+                      'Package A': 200000,
+                      'Package B': 250000,
+                      'Package C': 300000,
+                      'Package D': 100000
+                    };
+                    
+                    if (packageFallbacks[header.name]) {
+                      packageTotalPrice = packageFallbacks[header.name];
+                      console.log(`Using fallback price for ${header.name}: ${packageTotalPrice}`);
+                    }
+                  }
+                  
+                  console.log(`FINAL packageTotalPrice for ${header.name}: ${packageTotalPrice}`);
+                  console.log('=== END DEBUG ===\n');
+                }
+                
+                // Calculate total rows for all services in this header
+                let allRows = [];
+                
+                // For packages without individual service prices, create a single row
+                if (isPackage && packageTotalPrice > 0 && services.length === 1) {
+                  const service = services[0];
+                  const subServices = service.subServices && service.subServices.length > 0 ? service.subServices : [null];
+                  
+                  // Use package total as service price if service has no price
+                  const servicePrice = service.price || service.totalAmount || service.amount || service.cost || packageTotalPrice;
+                  
+                  subServices.forEach((subService, subIndex) => {
+                    allRows.push({
+                      serviceIndex: 0,
+                      subIndex,
+                      isFirstSubService: subIndex === 0,
+                      service: {...service, price: servicePrice},
+                      subService,
+                      subCount: subServices.length,
+                      servicePrice
+                    });
+                  });
+                } else {
+                  // Normal service processing
+                  services.forEach((service, serviceIndex) => {
+                    const subServices = service.subServices && service.subServices.length > 0 ? service.subServices : [null];
+                    const servicePrice = service.price || service.totalAmount || service.amount || service.cost || 0;
+                    
+                    subServices.forEach((subService, subIndex) => {
+                      allRows.push({
+                        serviceIndex,
+                        subIndex,
+                        isFirstSubService: subIndex === 0,
+                        service,
+                        subService,
+                        subCount: subServices.length,
+                        servicePrice
+                      });
+                    });
+                  });
+                }
 
-            {quotation.headers && quotation.headers.length > 0 ? (
-              quotation.headers.map((header) => (
-                <Box key={header.id} sx={{ mb: 3 }}>
-                  <Typography 
-                    variant="h6" 
+                if (allRows.length === 0) return null;
+
+                return (
+                  <Box 
+                    key={`header-${headerIndex}`} 
                     sx={{ 
-                      mb: 2, 
-                      p: 2, 
-                      background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)', 
-                      color: 'white', 
-                      borderRadius: 2,
-                      fontWeight: 'bold',
-                      boxShadow: '0 2px 8px rgba(25,118,210,0.3)'
+                      mb: 4,
+                      pageBreakAfter: 'always',
+                      minHeight: '60vh'
                     }}
                   >
-                    {header.name}
-                  </Typography>
+                    {/* Page break for new header section */}
+                    {headerIndex > 0 && (
+                      <Box sx={{ 
+                        height: '100px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mb: 4
+                      }}>
+                        <Divider sx={{ width: '100%', borderBottom: '3px solid #000' }} />
+                      </Box>
+                    )}
+                    
+                    {/* Header Title for this section */}
+                    {headerIndex > 0 && (
+                      <Box sx={{ mb: 4 }}>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          borderBottom: '2px solid #000',
+                          pb: 2
+                        }}>
+                          <Typography 
+                            variant="h4" 
+                            fontWeight="bold" 
+                            sx={{ 
+                              color: '#000',
+                              letterSpacing: '3px',
+                              fontSize: '2rem'
+                            }}
+                          >
+                            {header.name?.toUpperCase()}
+                          </Typography>
+                          
+                          {/* RERA Easy Logo */}
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <img 
+                              src="/api/logo.jpg" 
+                              alt="RERA Easy Logo" 
+                              style={{ 
+                                height: '60px', 
+                                width: 'auto'
+                              }} 
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      </Box>
+                    )}
+                    
+                    <TableContainer sx={{ border: '1px solid #000', boxShadow: 'none', backgroundColor: '#fff' }}>
+                      <Table sx={{ 
+                        borderCollapse: 'collapse',
+                        width: '100%',
+                        '& th, & td': {
+                          border: '1px solid #000'
+                        }
+                      }}>
+                        {/* Table Header */}
+                        <thead>
+                          <TableRow sx={{ backgroundColor: '#f8f9fa' }}>
+                            <TableCell sx={{ 
+                              border: '1px solid #000', 
+                              padding: '12px 16px', 
+                              fontWeight: 'bold', 
+                              fontSize: '14px',
+                              textAlign: 'center',
+                              width: '30%'
+                            }}>
+                              Service
+                            </TableCell>
+                            <TableCell sx={{ 
+                              border: '1px solid #000', 
+                              padding: '12px 16px', 
+                              fontWeight: 'bold', 
+                              fontSize: '14px',
+                              textAlign: 'center',
+                              width: '50%'
+                            }}>
+                              Description
+                            </TableCell>
+                            <TableCell sx={{ 
+                              border: '1px solid #000', 
+                              padding: '12px 16px', 
+                              fontWeight: 'bold', 
+                              fontSize: '14px',
+                              textAlign: 'center',
+                              width: '20%'
+                            }}>
+                              Amount (Rs.)
+                            </TableCell>
+                          </TableRow>
+                        </thead>
+                        <TableBody>
+                          {allRows.map((row, rowIndex) => (
+                            <TableRow key={`${headerIndex}-${row.serviceIndex}-${row.subIndex}`}>
+                              {/* Service column */}
+                              {row.isFirstSubService && (
+                                <TableCell
+                                  rowSpan={row.subCount}
+                                  sx={{
+                                    border: '1px solid #000',
+                                    padding: '12px 16px',
+                                    textAlign: 'left',
+                                    verticalAlign: 'top',
+                                    backgroundColor: '#f8f9fa',
+                                    fontWeight: 'bold',
+                                    fontSize: '13px'
+                                  }}
+                                >
+                                  {row.service.name}
+                                </TableCell>
+                              )}
 
-                  <TableContainer component={Paper} sx={{ ...excelTableStyles, mb: 2 }}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ width: '50%' }}>Service Name</TableCell>
-                          <TableCell>Sub-Services</TableCell>
-                          <TableCell align="right" sx={{ width: '20%' }}>Price (₹)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {header.services && header.services.length > 0 ? (
-                          header.services.map((service, serviceIndex) => (
-                            <TableRow key={service.id || serviceIndex}>
-                              <TableCell sx={{ fontWeight: 'bold', verticalAlign: 'top' }}>
-                                {service.name}
-                              </TableCell>
-                              <TableCell sx={{ verticalAlign: 'top' }}>
-                                {service.subServices && service.subServices.length > 0 ? (
-                                  <List dense sx={{ py: 0 }}>
-                                    {service.subServices.map((subService, subIndex) => (
-                                      <ListItem key={subService.id || subIndex} sx={{ py: 0.25, pl: 0 }}>
-                                        <ListItemIcon sx={{ minWidth: 20 }}>
-                                          <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
-                                        </ListItemIcon>
-                                        <ListItemText 
-                                          primary={subService.name}
-                                          sx={{ my: 0 }}
-                                          primaryTypographyProps={{ fontSize: '0.8rem' }}
-                                        />
-                                      </ListItem>
-                                    ))}
-                                  </List>
-                                ) : (
-                                  <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                                    No sub-services
+                              {/* Description column */}
+                              <TableCell
+                                sx={{
+                                  border: '1px solid #000',
+                                  padding: '12px 16px',
+                                  fontSize: '13px',
+                                  verticalAlign: 'top',
+                                  lineHeight: 1.4
+                                }}
+                              >
+                                {row.subService ? row.subService.name : (
+                                  <Typography variant="body2" sx={{ fontStyle: 'italic', color: '#666', fontSize: '13px' }}>
+                                    Service details
                                   </Typography>
                                 )}
                               </TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 'bold', verticalAlign: 'top' }}>
-                                {(service.price || 0).toLocaleString()}
+
+                              {/* Price column */}
+                              {row.isFirstSubService && (
+                                <TableCell
+                                  rowSpan={row.subCount}
+                                  sx={{
+                                    border: '1px solid #000',
+                                    textAlign: 'right',
+                                    verticalAlign: 'middle',
+                                    padding: '12px 16px',
+                                    fontSize: '14px',
+                                    fontWeight: 'bold',
+                                    backgroundColor: '#fff'
+                                  }}
+                                >
+                                  {row.servicePrice > 0 ? `${row.servicePrice.toLocaleString()}*` : '0*'}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                          
+                          {/* Package Total Row - show for all packages */}
+                          {isPackage && (
+                            <TableRow sx={{ backgroundColor: '#e8f4fd' }}>
+                              <TableCell
+                                sx={{
+                                  border: '1px solid #000',
+                                  borderTop: '2px solid #000',
+                                  textAlign: 'left',
+                                  fontSize: '14px',
+                                  fontWeight: 'bold',
+                                  padding: '12px 16px',
+                                  backgroundColor: '#e8f4fd'
+                                }}
+                              >
+                                {header.name} Total
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  border: '1px solid #000',
+                                  borderTop: '2px solid #000',
+                                  textAlign: 'center',
+                                  fontSize: '14px',
+                                  fontWeight: 'bold',
+                                  padding: '12px 16px',
+                                  backgroundColor: '#e8f4fd'
+                                }}
+                              >
+                                Package Total
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  border: '1px solid #000',
+                                  borderTop: '2px solid #000',
+                                  textAlign: 'right',
+                                  fontSize: '14px',
+                                  fontWeight: 'bold',
+                                  padding: '12px 16px',
+                                  backgroundColor: '#e8f4fd'
+                                }}
+                              >
+                                {packageTotalPrice > 0 ? `${packageTotalPrice.toLocaleString()}*` : 'TBD*'}
                               </TableCell>
                             </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={3} align="center">
-                              <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                                No services selected for this category
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', ml: 2 }}>
-                    No services selected for this category
-                  </Typography>
-                )}
-              </Box>
-            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                );
+              })}
+            </>
           ) : (
-            <Alert severity="info">
-              No services selected
-            </Alert>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Alert severity="info">No services selected</Alert>
+            </Box>
           )}
-          </Box>
+        </Box>
 
-          {/* Total Amount Section */}
-          <Box sx={{ 
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            p: 2, 
-            backgroundColor: '#f0f7ff', 
-            border: '1px solid #1976d2',
-            borderRadius: 1,
-            mb: 3
-          }}>
-            <Typography variant="h6" fontWeight="bold" color="primary">
-              Total Amount:
-            </Typography>
-            <Typography variant="h5" fontWeight="bold" color="primary">
-              ₹{(quotation.totalAmount || calculateTotalAmount()).toLocaleString()}
-            </Typography>
-          </Box>
+        {/* Total Amount Section */}
+        <TableContainer sx={{ border: '1px solid #000', boxShadow: 'none', mt: 3, backgroundColor: '#fff' }}>
+          <Table sx={{ borderCollapse: 'collapse' }}>
+            <TableBody>
+              <TableRow sx={{ backgroundColor: '#f0f8ff' }}>
+                <TableCell 
+                  sx={{
+                    border: '1px solid #000',
+                    borderTop: '2px solid #000',
+                    textAlign: 'center',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    padding: '16px',
+                    backgroundColor: '#f0f8ff',
+                    width: '80%'
+                  }}
+                >
+                  Total Payable Amount
+                </TableCell>
+                <TableCell 
+                  sx={{
+                    border: '1px solid #000',
+                    borderTop: '2px solid #000',
+                    textAlign: 'right',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    padding: '16px',
+                    backgroundColor: '#f0f8ff',
+                    width: '20%'
+                  }}
+                >
+                  Rs. {(quotation.totalAmount || calculateTotalAmount()).toLocaleString()}*
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-          {/* Action Buttons */}
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3 }}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={handleDownload}
-              size="large"
-              sx={{
-                borderColor: '#1976d2',
-                color: '#1976d2',
-                '&:hover': {
-                  backgroundColor: '#f0f7ff',
-                  borderColor: '#1976d2'
-                }
-              }}
-            >
-              Download Quotation
-            </Button>
-            
-            <Button
-              variant="contained"
-              startIcon={<CheckCircleIcon />}
-              onClick={handleCompleteQuotation}
-              size="large"
-              sx={{ 
-                px: 4,
-                backgroundColor: '#1976d2',
-                '&:hover': {
-                  backgroundColor: '#1565c0'
-                }
-              }}
-            >
-              Complete Quotation
-            </Button>
-          </Box>
-
-          {/* Footer */}
-          <Box sx={{ 
-            textAlign: 'center', 
-            pt: 3, 
-            mt: 2,
-            borderTop: '2px solid #e3f2fd',
-            color: 'text.secondary',
-            backgroundColor: '#f8faff',
-            borderRadius: 2,
-            p: 2
-          }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-              This is a computer-generated quotation and does not require a signature.
+        {/* Terms & Conditions Section */}
+        {acceptedTerms.length > 0 && (
+          <Box sx={{ mt: 4, mb: 3 }}>
+            <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, fontSize: '16px' }}>
+              Term & Conditions:
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 2, mb: 1 }}>
-              <Typography variant="body2">Generated: {new Date().toLocaleDateString('en-GB')}</Typography>
-              <Typography variant="body2">ID: {quotation.id}</Typography>
+            <Box component="ul" sx={{ pl: 2, m: 0, listStyleType: 'disc' }}>
+              {acceptedTerms.map((term, index) => (
+                <Typography 
+                  key={`term-${index}`}
+                  component="li" 
+                  variant="body2" 
+                  sx={{ mb: 0.5, lineHeight: 1.4, fontSize: '13px' }}
+                >
+                  {term}
+                </Typography>
+              ))}
             </Box>
           </Box>
-        </Paper>
+        )}
+
+        {/* Footer with Quotation ID */}
+        <Box sx={{ 
+          borderTop: '2px solid #000',
+          pt: 1,
+          mt: 3,
+          display: 'flex',
+          justifyContent: 'flex-start',
+          alignItems: 'center'
+        }}>
+          <Typography variant="body1" fontWeight="bold" sx={{ fontSize: '14px' }}>
+            REQ {quotation.id?.replace('REQ ', '') || '0001'}
+          </Typography>
+        </Box>
+
+        {/* Action Buttons */}
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 4 }}>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownload}
+            size="large"
+            sx={{
+              borderColor: '#1976d2',
+              color: '#1976d2',
+              '&:hover': {
+                backgroundColor: '#f0f7ff',
+                borderColor: '#1976d2'
+              }
+            }}
+          >
+            Download Quotation
+          </Button>
+          
+          <Button
+            variant="contained"
+            startIcon={<CheckCircleIcon />}
+            onClick={handleCompleteQuotation}
+            size="large"
+            sx={{ 
+              px: 4,
+              backgroundColor: '#1976d2',
+              '&:hover': {
+                backgroundColor: '#1565c0'
+              }
+            }}
+          >
+            Complete Quotation
+          </Button>
+        </Box>
+
       </Container>
     </Box>
   );

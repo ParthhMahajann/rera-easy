@@ -39,31 +39,40 @@ function QuotationServicesContent() {
           // Transform and load the existing data into the context
           if (existingQuotation.headers && existingQuotation.headers.length > 0) {
             // Convert backend format to frontend format
-            const transformedHeaders = existingQuotation.headers.map(header => ({
-              name: header.header,
-              services: header.services.map(service => {
-                const transformedService = {
-                  id: service.id,
-                  name: service.label || service.serviceName,
-                  label: service.label || service.serviceName,
-                  subServices: service.subServices ? 
-                    service.subServices.reduce((acc, subService) => {
-                      acc[subService.id || subService.text] = subService.text || subService.name;
-                      return acc;
-                    }, {}) : {}
-                };
-                
-                // Preserve year/quarter selections if they exist
-                if (service.selectedYears) {
-                  transformedService.selectedYears = service.selectedYears;
-                }
-                if (service.selectedQuarters) {
-                  transformedService.selectedQuarters = service.selectedQuarters;
-                }
-                
-                return transformedService;
-              })
-            }));
+            const transformedHeaders = existingQuotation.headers.map(header => {
+              const headerData = {
+                name: header.header,
+                services: header.services.map(service => {
+                  const transformedService = {
+                    id: service.id,
+                    name: service.label || service.serviceName,
+                    label: service.label || service.serviceName,
+                    subServices: service.subServices ? 
+                      service.subServices.reduce((acc, subService) => {
+                        acc[subService.id || subService.text] = subService.text || subService.name;
+                        return acc;
+                      }, {}) : {}
+                  };
+                  
+                  // Preserve year/quarter selections if they exist
+                  if (service.selectedYears) {
+                    transformedService.selectedYears = service.selectedYears;
+                  }
+                  if (service.selectedQuarters) {
+                    transformedService.selectedQuarters = service.selectedQuarters;
+                  }
+                  
+                  return transformedService;
+                })
+              };
+              
+              // Handle custom headers - preserve original name if it's a custom header
+              if (header.originalName && header.originalName.startsWith('custom-')) {
+                headerData.originalName = header.originalName;
+              }
+              
+              return headerData;
+            });
             
             console.log('Transformed headers for context:', transformedHeaders);
             loadExistingData(transformedHeaders);
@@ -89,29 +98,39 @@ function QuotationServicesContent() {
         setError("");
         
         // Handle both old format (array) and new format (object with headers and requiresApproval)
-        let selectedHeaders, requiresApproval = false;
+        let selectedHeaders, requiresApproval = false, customHeaderNames = {};
         
         if (Array.isArray(result)) {
           // Old format - backward compatibility
           selectedHeaders = result;
         } else {
-          // New format with approval requirement
+          // New format with approval requirement and custom header names
           selectedHeaders = result.headers;
           requiresApproval = result.requiresApproval;
+          customHeaderNames = result.customHeaderNames || {};
         }
         
         // Transform the selected headers to the expected format
-        const headers = selectedHeaders.map(({ name, services = [] }) => ({
-          header: name,
-          services: services.map(({ id, name, label, subServices = {} }) => ({
-            id: id || name,
-            label: label || name,
-            subServices: Object.keys(subServices).map((ss) => ({
-              id: ss,
-              text: ss,
-            })),
-          })),
-        }));
+        const headers = selectedHeaders.map(({ name, originalName, services = [] }) => {
+          const headerData = {
+            header: name,
+            services: services.map(({ id, name, label, subServices = {} }) => ({
+              id: id || name,
+              label: label || name,
+              subServices: Object.keys(subServices).map((ss) => ({
+                id: ss,
+                text: ss,
+              })),
+            }))
+          };
+          
+          // Include original name for custom headers
+          if (originalName && originalName.startsWith('custom-')) {
+            headerData.originalName = originalName;
+          }
+          
+          return headerData;
+        });
 
         console.log("Saving headers:", headers); // Debug log
         console.log("Requires approval:", requiresApproval); // Debug log

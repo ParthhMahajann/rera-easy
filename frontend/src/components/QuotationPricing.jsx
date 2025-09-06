@@ -109,17 +109,17 @@ const QuotationPricing = () => {
 
       if (field === "finalAmount") {
         // User is editing the final price directly
-        const newFinalAmount = parseFloat(value) || 0;
+        const newFinalAmount = parseInt(value) || 0;
         service.finalAmount = Math.max(newFinalAmount, 0);
         
         // Calculate discount amount and percentage
         const discountAmount = Math.max(originalAmount - newFinalAmount, 0);
-        service.discountAmount = discountAmount;
+        service.discountAmount = Math.round(discountAmount);
         service.discountPercent = originalAmount > 0 ? (discountAmount / originalAmount) * 100 : 0;
         
       } else if (field === "discountAmount") {
         // User is editing discount amount
-        const discountAmount = parseFloat(value) || 0;
+        const discountAmount = parseInt(value) || 0;
         service.discountAmount = Math.max(discountAmount, 0);
         service.finalAmount = Math.max(originalAmount - discountAmount, 0);
         service.discountPercent = originalAmount > 0 ? (discountAmount / originalAmount) * 100 : 0;
@@ -128,7 +128,7 @@ const QuotationPricing = () => {
         // User is editing discount percentage
         const discountPercent = parseFloat(value) || 0;
         service.discountPercent = Math.max(Math.min(discountPercent, 100), 0); // Clamp between 0-100
-        const discountAmount = (originalAmount * service.discountPercent) / 100;
+        const discountAmount = Math.round((originalAmount * service.discountPercent) / 100);
         service.discountAmount = discountAmount;
         service.finalAmount = Math.max(originalAmount - discountAmount, 0);
       }
@@ -328,7 +328,7 @@ const QuotationPricing = () => {
                       <TextField
                         size="small"
                         type="number"
-                        value={service.finalAmount || 0}
+                        value={Math.round(service.finalAmount) || 0}
                         onChange={(e) =>
                           handleServicePriceChange(hi, si, "finalAmount", e.target.value)
                         }
@@ -344,7 +344,7 @@ const QuotationPricing = () => {
                             }
                           }
                         }}
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: 1 }}
                       />
                     </Box>
 
@@ -356,12 +356,12 @@ const QuotationPricing = () => {
                       <TextField
                         size="small"
                         type="number"
-                        value={service.discountAmount || 0}
+                        value={Math.round(service.discountAmount) || 0}
                         onChange={(e) =>
                           handleServicePriceChange(hi, si, "discountAmount", e.target.value)
                         }
                         sx={{ width: 120 }}
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: 1 }}
                       />
                     </Box>
 
@@ -438,7 +438,7 @@ const QuotationPricing = () => {
                     const clampedPercent = Math.max(Math.min(percent, 100), 0);
                     setDiscountPercent(clampedPercent);
                     // Auto-calculate amount based on current subtotal
-                    const amount = (finalTotals.serviceSubtotal * clampedPercent) / 100;
+                    const amount = Math.round((finalTotals.serviceSubtotal * clampedPercent) / 100);
                     setDiscountAmount(amount);
                   }}
                   sx={{ width: 120 }}
@@ -456,15 +456,15 @@ const QuotationPricing = () => {
                   type="number"
                   value={discountAmount || 0}
                   onChange={(e) => {
-                    const amount = parseFloat(e.target.value) || 0;
-                    const clampedAmount = Math.max(Math.min(amount, finalTotals.serviceSubtotal), 0);
+                    const amount = parseInt(e.target.value) || 0;
+                    const clampedAmount = Math.max(Math.min(amount, Math.round(finalTotals.serviceSubtotal)), 0);
                     setDiscountAmount(clampedAmount);
                     // Auto-calculate percentage
                     const percent = finalTotals.serviceSubtotal > 0 ? (clampedAmount / finalTotals.serviceSubtotal) * 100 : 0;
                     setDiscountPercent(percent);
                   }}
                   sx={{ width: 140 }}
-                  inputProps={{ min: 0, max: finalTotals.serviceSubtotal, step: 0.01 }}
+                  inputProps={{ min: 0, max: Math.round(finalTotals.serviceSubtotal), step: 1 }}
                 />
               </Box>
 
@@ -474,7 +474,7 @@ const QuotationPricing = () => {
                   Total Global Savings
                 </Typography>
                 <Typography fontWeight={600} color="error.main">
-                  ₹{finalTotals.globalDiscount.toLocaleString()}
+                  ₹{Math.round(finalTotals.globalDiscount).toLocaleString()}
                 </Typography>
               </Box>
             </Stack>
@@ -491,7 +491,7 @@ const QuotationPricing = () => {
             {/* Helpful Info */}
             <Box mt={2} p={2} bgcolor="info.light" borderRadius={1}>
               <Typography variant="body2" color="info.dark">
-                💡 <strong>Tip:</strong> Both percentage and amount fields are linked. Edit either one and the other will update automatically based on the current subtotal of ₹{finalTotals.serviceSubtotal.toLocaleString()}.
+                💡 <strong>Tip:</strong> Both percentage and amount fields are linked. Edit either one and the other will update automatically based on the current subtotal of ₹{Math.round(finalTotals.serviceSubtotal).toLocaleString()}.
               </Typography>
             </Box>
           </Box>
@@ -508,14 +508,14 @@ const QuotationPricing = () => {
         <Stack spacing={1}>
           <Stack direction="row" justifyContent="space-between">
             <Typography>Subtotal (before discounts):</Typography>
-            <Typography fontWeight={600}>₹{finalTotals.originalSubtotal.toLocaleString()}</Typography>
+            <Typography fontWeight={600}>₹{Math.round(finalTotals.originalSubtotal).toLocaleString()}</Typography>
           </Stack>
 
           {finalTotals.serviceDiscount > 0 && (
             <Stack direction="row" justifyContent="space-between">
               <Typography color="error">Service Discounts:</Typography>
               <Typography fontWeight={600} color="error">
-                -₹{finalTotals.serviceDiscount.toLocaleString()}
+                -₹{Math.round(finalTotals.serviceDiscount).toLocaleString()}
               </Typography>
             </Stack>
           )}
@@ -526,7 +526,7 @@ const QuotationPricing = () => {
                 Global Discount{discountType === "percent" ? ` (${discountPercent}%)` : ""}:
               </Typography>
               <Typography fontWeight={600} color="error">
-                -₹{finalTotals.globalDiscount.toLocaleString()}
+                -₹{Math.round(finalTotals.globalDiscount).toLocaleString()}
               </Typography>
             </Stack>
           )}
@@ -534,7 +534,7 @@ const QuotationPricing = () => {
           <Stack direction="row" justifyContent="space-between">
             <Typography>After Discount:</Typography>
             <Typography fontWeight={600}>
-              ₹{finalTotals.subtotalAfterDiscount.toLocaleString()}
+              ₹{Math.round(finalTotals.subtotalAfterDiscount).toLocaleString()}
             </Typography>
           </Stack>
 
@@ -542,7 +542,7 @@ const QuotationPricing = () => {
           <Stack direction="row" justifyContent="space-between" pt={1}>
             <Typography variant="h6">Total:</Typography>
             <Typography variant="h6" color="primary" fontWeight="bold">
-              ₹{finalTotals.total.toLocaleString()}
+              ₹{Math.round(finalTotals.total).toLocaleString()}
             </Typography>
           </Stack>
         </Stack>
