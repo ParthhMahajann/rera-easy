@@ -210,7 +210,7 @@ class ServicesDataManager:
             },
             
             "service-addon-4": {
-                "name": "Form 1",
+                "name": "Architect's Certificate as per Form 1",
                 "origin": "Add ons",
                 "requiresYearQuarter": True,
                 "subServices": [
@@ -220,7 +220,7 @@ class ServicesDataManager:
             },
             
             "service-addon-5": {
-                "name": "Form 2",
+                "name": "Engineer's Certificate as per Form 2",
                 "origin": "Add ons",
                 "requiresYearQuarter": True,
                 "subServices": [
@@ -230,7 +230,7 @@ class ServicesDataManager:
             },
             
             "service-addon-6": {
-                "name": "Form 3",
+                "name": "Chartered Accountant's Certificate as per Form 3",
                 "origin": "Add ons",
                 "requiresYearQuarter": True,
                 "subServices": [
@@ -240,9 +240,9 @@ class ServicesDataManager:
             },
             
             "service-addon-7": {
-                "name": "Form 5",
+                "name": "Annual Return/Report as per Form 5",
                 "origin": "Add ons",
-                "requiresYearQuarter": True,
+                "requiresYearOnly": True,
                 "subServices": [
                     {"id": "subservice-addon-7-1", "name": "Drafting assistance of Form 5 (Annual Report on Statement of Account) as per the Registers, Books & Documents"},
                     {"id": "subservice-addon-7-2", "name": "Certification of Form 5"}
@@ -355,6 +355,15 @@ class ServicesDataManager:
                         'label': service.get('label') or service.get('name'),
                         'subServices': actual_subservices
                     }
+                    
+                    # Preserve quarter information if present
+                    if service.get('quarterCount'):
+                        processed_service['quarterCount'] = service.get('quarterCount')
+                    if service.get('selectedQuarters'):
+                        processed_service['selectedQuarters'] = service.get('selectedQuarters')
+                    if service.get('selectedYears'):
+                        processed_service['selectedYears'] = service.get('selectedYears')
+                    
                     processed_header['services'].append(processed_service)
                     
             else:
@@ -369,6 +378,15 @@ class ServicesDataManager:
                         'label': service.get('label') or service.get('name'),
                         'subServices': actual_subservices
                     }
+                    
+                    # Preserve quarter information if present
+                    if service.get('quarterCount'):
+                        processed_service['quarterCount'] = service.get('quarterCount')
+                    if service.get('selectedQuarters'):
+                        processed_service['selectedQuarters'] = service.get('selectedQuarters')
+                    if service.get('selectedYears'):
+                        processed_service['selectedYears'] = service.get('selectedYears')
+                    
                     processed_header['services'].append(processed_service)
             
             processed_headers.append(processed_header)
@@ -418,10 +436,10 @@ class ServicesDataManager:
             "Title Report": "Title Certificate",
             "Search Report": "Drafting of Title Report in Format A",
             "SRO Membership": "SRO Membership",
-            "Form 1": "Form 1",
-            "Form 2": "Form 2 ",
-            "Form 3": "Form 3",
-            "Form 5": "Form 5"
+            "Architect's Certificate as per Form 1": "Form 1",
+            "Engineer's Certificate as per Form 2": "Form 2 ",
+            "Chartered Accountant's Certificate as per Form 3": "Form 3",
+            "Annual Return/Report as per Form 5": "Form 5"
         }
         
         # Return mapped name or original name if no mapping exists
@@ -541,16 +559,43 @@ class ServicesDataManager:
                 # **Get actual subservices with proper names**
                 actual_subservices = self.get_actual_subservices(service_id)
                 
-                # Use exact price from JSON without any multipliers
-                total_amt = exact_price
+                # Check if this service requires time-based pricing
+                service_data = self.COMPLETE_SERVICES_DATA.get(service_id, {})
+                requires_quarter_pricing = service_data.get('requiresYearQuarter', False)
+                requires_year_pricing = service_data.get('requiresYearOnly', False)
+                
+                # Calculate final price based on time multiplier if applicable
+                if requires_quarter_pricing:
+                    # Get quarter count from service data, default to 1 if not specified
+                    quarter_count = service.get('quarterCount', 1)
+                    total_amt = exact_price * quarter_count
+                elif requires_year_pricing:
+                    # Get year count from service data, default to 1 if not specified
+                    year_count = len(service.get('selectedYears', [])) or 1
+                    total_amt = exact_price * year_count
+                else:
+                    # Use exact price from JSON without any multipliers
+                    total_amt = exact_price
 
-                header_services.append({
+                service_entry = {
                     "id": service_id,
                     "name": s_name,
                     "baseAmount": exact_price,
                     "totalAmount": round(total_amt, 2),
                     "subServices": actual_subservices  # **Proper subservices with names**
-                })
+                }
+                
+                # Add time-based pricing information if applicable
+                if requires_quarter_pricing:
+                    service_entry["requiresYearQuarter"] = True
+                    service_entry["quarterCount"] = service.get('quarterCount', 1)
+                    service_entry["basePrice"] = exact_price
+                elif requires_year_pricing:
+                    service_entry["requiresYearOnly"] = True
+                    service_entry["yearCount"] = len(service.get('selectedYears', [])) or 1
+                    service_entry["basePrice"] = exact_price
+                
+                header_services.append(service_entry)
 
                 header_total += total_amt
                 total_services += 1

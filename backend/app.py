@@ -708,6 +708,28 @@ def pending(current_user):
         app.logger.error(f"Error fetching pending quotations: {str(e)}")
         return jsonify({"error": "Failed to fetch pending quotations"}), 500
 
+@app.route('/api/logo.png', methods=['GET'])
+def serve_png_logo():
+    """Serve the RERA Easy PNG logo"""
+    try:
+        return send_file('rera-easy-logo.png', mimetype='image/png')
+    except Exception as e:
+        app.logger.error(f"Error serving PNG logo: {str(e)}")
+        # Fallback to old logo if new one fails
+        try:
+            return send_file('logo.jpg', mimetype='image/jpeg')
+        except:
+            return jsonify({'error': 'Logo not found'}), 404
+
+@app.route('/api/logo.jpg', methods=['GET'])
+def serve_jpg_logo():
+    """Serve the fallback JPG logo"""
+    try:
+        return send_file('logo.jpg', mimetype='image/jpeg')
+    except Exception as e:
+        app.logger.error(f"Error serving JPG logo: {str(e)}")
+        return jsonify({'error': 'JPG Logo not found'}), 404
+
 with app.app_context():
     db.create_all()
 
