@@ -1,3 +1,5 @@
+# Updated app.py with display mode support
+
 from flask import Flask, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS, cross_origin
@@ -37,11 +39,11 @@ db = SQLAlchemy(app)
 
 # CORS Configuration - Allow ALL origins
 CORS(app,
-     origins=['*'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-     allow_headers=['Content-Type', 'Authorization'],
-     expose_headers=['Content-Disposition'],
-     supports_credentials=True)
+    origins=['*'],
+    methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allow_headers=['Content-Type', 'Authorization'],
+    expose_headers=['Content-Disposition'],
+    supports_credentials=True)
 
 @app.before_request
 def handle_preflight():
@@ -98,7 +100,7 @@ def get_next_quotation_number():
                 continue
         
         return max(numbers) + 1 if numbers else 1
-    
+        
     except Exception as e:
         app.logger.error(f"Error getting next quotation number: {str(e)}")
         return 1
@@ -238,89 +240,9 @@ def internal_error(error):
     db.session.rollback()
     return jsonify({'error': 'Internal server error', 'message': str(error)}), 500
 
-@app.route("/api/signup", methods=["POST"])
-@role_required("admin", "manager")
-def signup(current_user):
-    try:
-        data = request.get_json()
-        if not data.get("username") or not data.get("password"):
-            return jsonify({"error": "Username and password required"}), 400
+# ... [Keep all existing authentication and user management endpoints as they are] ...
 
-        if User.query.filter_by(username=data["username"]).first():
-            return jsonify({"error": "Username already exists"}), 400
-
-        new_role = data.get("role", "user")
-        new_threshold = float(data.get("threshold", 0))
-
-        if current_user.role == "manager":
-            if new_role in ["admin", "manager"]:
-                return jsonify({"error": "Managers cannot create admin or manager users"}), 403
-            if new_threshold > current_user.threshold:
-                return jsonify({"error": f"Threshold cannot exceed your limit of {current_user.threshold}%"}), 403
-
-        user = User(
-            fname=data.get("fname"),
-            lname=data.get("lname"),
-            username=data["username"],
-            role=new_role,
-            threshold=new_threshold
-        )
-        user.set_password(data["password"])
-
-        db.session.add(user)
-        db.session.commit()
-
-        return jsonify({
-            "message": "User created successfully",
-            "user": {
-                "username": user.username,
-                "role": user.role,
-                "threshold": user.threshold
-            }
-        }), 201
-
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Signup error: {str(e)}")
-        return jsonify({"error": "User creation failed"}), 500
-
-@app.route("/api/login", methods=["POST"])
-def login():
-    try:
-        data = request.get_json()
-        user = User.query.filter_by(username=data.get("username")).first()
-
-        if not user or not user.check_password(data.get("password")):
-            return jsonify({"error": "Invalid credentials"}), 401
-
-        token = generate_token(user)
-        if isinstance(token, bytes):
-            token = token.decode("utf-8")
-
-        return jsonify({
-            "token": token,
-            "role": user.role,
-            "fname": user.fname,
-            "lname": user.lname,
-            "username": user.username,
-            "threshold": user.threshold
-        })
-
-    except Exception as e:
-        app.logger.error(f"Login error: {str(e)}")
-        return jsonify({"error": "Login failed"}), 500
-
-@app.route("/api/me", methods=["GET"])
-@token_required
-def get_profile(current_user):
-    return jsonify({
-        "id": current_user.id,
-        "fname": current_user.fname,
-        "lname": current_user.lname,
-        "username": current_user.username,
-        "role": current_user.role,
-        "threshold": current_user.threshold
-    })
+# Updated quotation endpoints to support display modes
 
 @app.route('/api/quotations', methods=['GET'])
 @token_required
@@ -336,8 +258,8 @@ def get_quotations(current_user):
         return jsonify({'error': 'Failed to fetch quotations'}), 500
 
 @app.route('/api/quotations', methods=['POST'])
-@token_required  # Add this decorator
-def create_quotation(current_user):  # Add current_user parameter
+@token_required
+def create_quotation(current_user):
     try:
         data = request.get_json()
         
@@ -383,7 +305,6 @@ def create_quotation(current_user):  # Add current_user parameter
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to create quotation'}), 500
 
-
 @app.route('/api/quotations/calculate-pricing', methods=['POST'])
 @token_required
 def calculate_pricing(current_user):
@@ -421,7 +342,21 @@ def update_pricing(current_user, quotation_id):
         data = request.get_json()
 
         if 'pricingBreakdown' in data:
-            q.pricing_breakdown = data['pricingBreakdown'] if isinstance(data['pricingBreakdown'], list) else []
+            # **ENHANCED: Ensure finalAmount is preserved for display mode support**
+            pricing_breakdown = data['pricingBreakdown'] if isinstance(data['pricingBreakdown'], list) else []
+            
+            # Process each service to ensure both totalAmount and finalAmount are stored
+            for breakdown in pricing_breakdown:
+                if breakdown.get('services'):
+                    for service in breakdown['services']:
+                        # If finalAmount exists, preserve it (edited price)
+                        if 'finalAmount' in service:
+                            app.logger.debug(f"Preserving edited price for {service.get('name')}: {service['finalAmount']}")
+                        # Ensure totalAmount exists as fallback
+                        if 'totalAmount' not in service and 'finalAmount' in service:
+                            service['totalAmount'] = service['finalAmount']
+            
+            q.pricing_breakdown = pricing_breakdown
             flag_modified(q, 'pricing_breakdown')
 
         if 'headers' in data:
@@ -567,11 +502,16 @@ def download_quotation_pdf(quotation_id):
         if not q:
             return jsonify({'error': 'Quotation not found'}), 404
 
-        # Check if we should use the enhanced summary template
+        # **ENHANCED: Support for display mode parameter**
         app.logger.info(f"Full request URL: {request.url}")
         app.logger.info(f"Request args: {dict(request.args)}")
+        
         summary_param = request.args.get('summary', 'false')
+        display_mode = request.args.get('displayMode', 'bifurcated')  # NEW: Get display mode
+        
         app.logger.info(f"Raw summary parameter: '{summary_param}'")
+        app.logger.info(f"Display mode parameter: '{display_mode}'")
+        
         use_summary = summary_param.lower() == 'true'
         app.logger.info(f"use_summary evaluated to: {use_summary}")
         
@@ -579,22 +519,26 @@ def download_quotation_pdf(quotation_id):
             pdf_generator = QuotationPDFGenerator(use_summary_template=True)
         else:
             pdf_generator = QuotationPDFGenerator()
-            
+        
         filename = f"Quotation_{quotation_id}.pdf"
         pdf_dir = 'temp_pdfs'
         filepath = os.path.join(pdf_dir, filename)
         os.makedirs(pdf_dir, exist_ok=True)
 
-        app.logger.info(f"Generating PDF at: {filepath} (summary={use_summary})")
+        app.logger.info(f"Generating PDF at: {filepath} (summary={use_summary}, displayMode={display_mode})")
         app.logger.info(f"PDF generator template: {pdf_generator.template_name}")
+        
+        # **ENHANCED: Pass display mode to PDF generation**
+        quotation_dict = q.to_dict()
+        quotation_dict['displayMode'] = display_mode  # Add display mode to data
         
         if use_summary:
             app.logger.info("Using generate_summary_pdf method")
-            pdf_generator.generate_summary_pdf(q.to_dict(), filepath)
+            pdf_generator.generate_summary_pdf(quotation_dict, filepath)
         else:
             app.logger.info("Using generate_pdf method")
-            pdf_generator.generate_pdf(q.to_dict(), filepath)
-            
+            pdf_generator.generate_pdf(quotation_dict, filepath)
+        
         app.logger.debug(f"PDF generated successfully at: {filepath}")
 
         cleanup_temp_pdf(filepath, delay=300)
@@ -619,6 +563,8 @@ def download_quotation_pdf(quotation_id):
         app.logger.error(f"PDF generation error: {str(e)}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
+
+# ... [Keep all other existing endpoints as they are] ...
 
 @app.route('/api/quotations/<quotation_id>/terms', methods=['PUT'])
 @token_required
@@ -678,6 +624,8 @@ def update_terms(current_user, quotation_id):
         app.logger.error(f"Error updating terms: {str(e)}")
         return jsonify({'error': f'Failed to update terms: {str(e)}'}), 500
 
+# ... [Keep all other endpoints - approval, pending, logo serving, etc. as they were] ...
+
 @app.route("/api/quotations/<quotation_id>/approve", methods=["PUT"])
 @token_required
 def approve(current_user, quotation_id):
@@ -729,6 +677,90 @@ def pending(current_user):
     except Exception as e:
         app.logger.error(f"Error fetching pending quotations: {str(e)}")
         return jsonify({"error": "Failed to fetch pending quotations"}), 500
+
+@app.route("/api/signup", methods=["POST"])
+@role_required("admin", "manager")
+def signup(current_user):
+    try:
+        data = request.get_json()
+        if not data.get("username") or not data.get("password"):
+            return jsonify({"error": "Username and password required"}), 400
+
+        if User.query.filter_by(username=data["username"]).first():
+            return jsonify({"error": "Username already exists"}), 400
+
+        new_role = data.get("role", "user")
+        new_threshold = float(data.get("threshold", 0))
+
+        if current_user.role == "manager":
+            if new_role in ["admin", "manager"]:
+                return jsonify({"error": "Managers cannot create admin or manager users"}), 403
+            if new_threshold > current_user.threshold:
+                return jsonify({"error": f"Threshold cannot exceed your limit of {current_user.threshold}%"}), 403
+
+        user = User(
+            fname=data.get("fname"),
+            lname=data.get("lname"),
+            username=data["username"],
+            role=new_role,
+            threshold=new_threshold
+        )
+        user.set_password(data["password"])
+
+        db.session.add(user)
+        db.session.commit()
+
+        return jsonify({
+            "message": "User created successfully",
+            "user": {
+                "username": user.username,
+                "role": user.role,
+                "threshold": user.threshold
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Signup error: {str(e)}")
+        return jsonify({"error": "User creation failed"}), 500
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    try:
+        data = request.get_json()
+        user = User.query.filter_by(username=data.get("username")).first()
+
+        if not user or not user.check_password(data.get("password")):
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        token = generate_token(user)
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+
+        return jsonify({
+            "token": token,
+            "role": user.role,
+            "fname": user.fname,
+            "lname": user.lname,
+            "username": user.username,
+            "threshold": user.threshold
+        })
+
+    except Exception as e:
+        app.logger.error(f"Login error: {str(e)}")
+        return jsonify({"error": "Login failed"}), 500
+
+@app.route("/api/me", methods=["GET"])
+@token_required
+def get_profile(current_user):
+    return jsonify({
+        "id": current_user.id,
+        "fname": current_user.fname,
+        "lname": current_user.lname,
+        "username": current_user.username,
+        "role": current_user.role,
+        "threshold": current_user.threshold
+    })
 
 @app.route('/api/logo.png', methods=['GET'])
 def serve_png_logo():

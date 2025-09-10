@@ -14,7 +14,7 @@ class QuotationPDFGenerator:
         self.template_name = "quotation_summary_template.html" if use_summary_template else "quotation_template.html"
 
         # wkhtmltopdf setup (change path if installed elsewhere, or set env WKHTMLTOPDF_PATH)
-        default_path = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+        default_path = r"C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe"
         self.path_wkhtmltopdf = os.environ.get("WKHTMLTOPDF_PATH", default_path)
         if not os.path.exists(self.path_wkhtmltopdf):
             raise FileNotFoundError(
@@ -25,8 +25,8 @@ class QuotationPDFGenerator:
 
         # wkhtmltopdf options
         self.wk_options = {
-            "enable-local-file-access": None,          # allow file:// URIs
-            "allow": [self.template_dir],              # whitelist template dir for assets
+            "enable-local-file-access": None,  # allow file:// URIs
+            "allow": [self.template_dir],  # whitelist template dir for assets
             "page-size": "A4",
             "margin-top": "10mm",
             "margin-right": "12mm",
@@ -35,9 +35,9 @@ class QuotationPDFGenerator:
             "quiet": "",
             "load-error-handling": "ignore",
             "load-media-error-handling": "ignore",
-            "enable-smart-shrinking": "",              # better page break handling
-            "print-media-type": "",                    # use print CSS rules
-            "disable-smart-shrinking": None,           # disable to respect page breaks
+            "enable-smart-shrinking": "",  # better page break handling
+            "print-media-type": "",  # use print CSS rules
+            "disable-smart-shrinking": None,  # disable to respect page breaks
         }
 
     # ---------------- Utility helpers ----------------
@@ -133,12 +133,12 @@ class QuotationPDFGenerator:
         # ---- Render HTML ----
         template = self.env.get_template(self.template_name)
         html_out = template.render(
-            header=top_header,           # << dynamic header text at the top-left
+            header=top_header,  # << dynamic header text at the top-left
             sections=sections,
             total=total_amount,
             terms=terms,
             ref_number=ref_number,
-            logo_src=logo_src or "",     # template uses {{ logo_src }} on the top-right
+            logo_src=logo_src or "",  # template uses {{ logo_src }} on the top-right
         )
 
         # ---- HTML -> PDF ----
@@ -161,9 +161,15 @@ class QuotationPDFGenerator:
         """
         Generate PDF using the QuotationSummary template that mirrors the JSX component layout.
         This method processes the data exactly as it appears in the QuotationSummary.jsx component.
+        **ENHANCED: Support for display mode functionality**
         """
         print(f"🚀 generate_summary_pdf called with template: {self.template_name}")
         print(f"📊 DEBUG: Full quotation_data keys: {list(quotation_data.keys())}")
+        
+        # **NEW: Get display mode from quotation data**
+        display_mode = quotation_data.get('displayMode', 'bifurcated')
+        print(f"🔧 Display mode: {display_mode}")
+        
         if quotation_data.get("pricingBreakdown"):
             print(f"📊 DEBUG: pricingBreakdown structure:")
             for i, breakdown in enumerate(quotation_data["pricingBreakdown"]):
@@ -223,7 +229,7 @@ class QuotationPDFGenerator:
                     print(f"🔍 DEBUG: Found package_breakdown: {package_breakdown}")
                     if package_breakdown and package_breakdown.get("services"):
                         services_total = sum(self.safe_number(s.get("finalAmount") or s.get("totalAmount", 0)) 
-                                          for s in package_breakdown["services"])
+                                           for s in package_breakdown["services"])
                         package_total = services_total
                         print(f"🔍 DEBUG: Calculated package_total from services: {package_total}")
                 
@@ -265,10 +271,20 @@ class QuotationPDFGenerator:
                 if not service_price:
                     service_price = self.safe_number(service.get("price", 0))
                 
-                # For packages A, B, C, D - don't show individual service prices
+                # **ENHANCED: Display mode logic for individual service prices**
                 display_price = service_price
-                if is_package:
-                    display_price = None  # Hide individual prices for packages
+                show_individual_price = True
+                
+                if display_mode == 'lumpsum':
+                    # In lump sum mode, hide individual service prices
+                    display_price = None
+                    show_individual_price = False
+                    print(f"💡 Lump sum mode: Hiding individual price for '{service_name}'")
+                elif is_package:
+                    # For packages in bifurcated mode, may still hide individual prices depending on design
+                    # But for now, we'll show them in bifurcated mode
+                    show_individual_price = True
+                    print(f"💡 Bifurcated mode: Showing individual price for '{service_name}': {display_price}")
                 
                 # Process subservices
                 sub_services = []
@@ -299,7 +315,8 @@ class QuotationPDFGenerator:
                 processed_services.append({
                     "name": service_name,
                     "price": service_price,  # Keep actual price for calculations
-                    "display_price": display_price,  # Price to show in template
+                    "display_price": display_price,  # Price to show in template (None for hidden)
+                    "show_individual_price": show_individual_price,  # Boolean flag for template
                     "subServices": sub_services,
                     "size_class": size_class
                 })
@@ -345,7 +362,7 @@ class QuotationPDFGenerator:
                 validity_days = 30
             else:
                 import re
-                matches = re.findall(r'\d+', validity_str)
+                matches = re.findall(r'\\d+', validity_str)
                 if matches:
                     validity_days = int(matches[0])
             
@@ -426,7 +443,7 @@ class QuotationPDFGenerator:
         
         print(f"Debug: Final logo_src: {logo_src}")
         
-        # Render HTML using the new template
+        # **ENHANCED: Render HTML using the new template with display mode support**
         template = self.env.get_template(self.template_name)
         html_out = template.render(
             page_title=page_title,
@@ -435,7 +452,9 @@ class QuotationPDFGenerator:
             terms=terms,
             ref_number=ref_number,
             logo_src=logo_src or "",
-            watermark_logo=logo_src or ""  # For watermark usage
+            watermark_logo=logo_src or "",  # For watermark usage
+            display_mode=display_mode,  # **NEW: Pass display mode to template**
+            show_individual_prices=(display_mode == 'bifurcated')  # **NEW: Helper flag for template**
         )
         
         # HTML -> PDF
@@ -486,9 +505,9 @@ class QuotationPDFGenerator:
         """
         Merge optional images from ./images with the generated PDF.
         Order:
-          - images/1.(jpg|png|jpeg)  -> before main content
-          - generated pdf
-          - images/2..8.(jpg|png|jpeg) -> after main content
+        - images/1.(jpg|png|jpeg) -> before main content
+        - generated pdf
+        - images/2..8.(jpg|png|jpeg) -> after main content
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
         images_dir = os.path.join(base_dir, "images")
@@ -535,7 +554,7 @@ class QuotationPDFGenerator:
             abs_path = os.path.abspath(path)
             # Convert Windows path to proper file URI
             if os.name == 'nt':  # Windows
-                abs_path = abs_path.replace("\\", "/")
+                abs_path = abs_path.replace("\\\\", "/")
                 # Ensure proper file URI format for Windows
                 return f"file:///{abs_path}"
             else:

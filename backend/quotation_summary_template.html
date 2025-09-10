@@ -5,481 +5,458 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ page_title }}</title>
     <style>
+        /* Enhanced CSS for Quotation Summary with Display Mode Support */
+        @page {
+            size: A4;
+            margin: 12mm;
+        }
+        
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
         }
         
         body {
-            font-family: Arial, sans-serif;
-            background-color: #ffffff;
-            color: #000000;
-            font-size: 14px;
-            padding: 20px;
+            font-family: 'Arial', sans-serif;
+            font-size: 11pt;
             line-height: 1.4;
-            position: relative;
+            color: #333;
+            background: white;
         }
         
-        /* Page watermark styling */
-        .page {
-            position: relative;
-            min-height: 100vh;
-        }
-        
-        /* Watermark styling */
-        .watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-45deg);
-            opacity: 0.06;
-            z-index: 0;
-            pointer-events: none;
-            width: 350px;
-            height: auto;
-            overflow: hidden;
-        }
-        
-        .watermark img {
-            width: 100%;
-            height: auto;
-            display: block;
-            filter: grayscale(100%) brightness(130%);
-        }
-
         .container {
             max-width: 100%;
             margin: 0 auto;
-            position: relative;
-            z-index: 1;
         }
         
-        /* Ensure content is above watermark */
-        .header-section,
-        .final-total-section {
-            position: relative;
-            z-index: 2;
-            background-color: rgba(255, 255, 255, 0.95);
-        }
-
-        /* Header with Logo and Title */
-        .header {
-            width: 100%;
+        /* Header Section */
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
-            border-bottom: 3px solid #000;
-            padding-bottom: 10px;
-            position: relative;
-            min-height: 60px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #1976d2;
+            page-break-after: avoid;
         }
-
-        .header-logo {
-            float: right;
+        
+        .page-title {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #1976d2;
+            margin: 0;
+            flex: 1;
+        }
+        
+        .logo-container {
+            flex-shrink: 0;
             margin-left: 20px;
         }
-
-        .header-logo img {
-            height: 50px;
+        
+        .logo-container img {
+            height: 60px;
             width: auto;
-            display: block;
+            max-width: 120px;
         }
-
-        .header-title {
-            font-size: 28px;
+        
+        .logo-fallback {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 60px;
+            background-color: #1976d2;
+            color: white;
             font-weight: bold;
-            color: #000;
-            letter-spacing: 1px;
-            margin-top: 10px;
-            margin-right: 80px;
+            font-size: 14pt;
+            border-radius: 4px;
         }
-
-        .header:after {
-            content: "";
-            display: table;
-            clear: both;
-        }
-
-        /* Main Services Section - Simple Line Layout */
-        .services-section {
-            margin-top: 30px;
-            margin-bottom: 30px;
-            page-break-inside: avoid;
-        }
-
-        .header-section {
-            page-break-after: always;
-            min-height: 70vh;
-        }
-
-        .header-section:last-child {
-            page-break-after: auto;
-        }
-
-        /* Service Entry Layout */
-        .service-entry {
-            border-top: 2px solid #000;
-            padding: 20px 0;
-            display: block;
-            width: 100%;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            orphans: 3;
-            widows: 3;
-        }
-
-        .service-entry:first-child {
-            border-top: 3px solid #000;
-        }
-
-        /* Ensure service entries don't break awkwardly */
-        .service-entry.large {
-            page-break-before: auto;
-            min-height: 200px;
-        }
-
-        .service-entry.medium {
-            min-height: 150px;
-        }
-
-        .service-entry.small {
-            min-height: 100px;
-        }
-
-        .service-header {
-            display: block;
-            width: 100%;
-            margin-bottom: 15px;
-        }
-
-        .service-name {
-            font-weight: bold;
-            font-size: 16px;
-            color: #000;
+        
+        /* Display Mode Indicator (for debugging) */
+        .display-mode-debug {
+            font-size: 8pt;
+            color: #666;
             margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            text-align: center;
+            font-style: italic;
         }
-
-        .service-content {
-            display: block;
-            width: 100%;
-        }
-
-        .service-details {
-            float: left;
-            width: 75%;
-            padding-right: 20px;
-        }
-
-        .service-price {
-            float: right;
-            width: 20%;
-            text-align: right;
-            font-weight: bold;
-            font-size: 16px;
-            padding-top: 10px;
-        }
-
-        .service-content:after {
-            content: "";
-            display: table;
-            clear: both;
-        }
-
-        /* Sub-services Styling */
-        .subservices-list {
-            margin-top: 10px;
-            margin-left: 0;
-            padding-left: 20px;
-            list-style-type: disc;
+        
+        /* Table Section */
+        .table-section {
+            margin-bottom: 25px;
             page-break-inside: avoid;
-            break-inside: avoid;
         }
-
-        .subservice-item {
-            margin-bottom: 8px;
-            font-size: 13px;
-            line-height: 1.5;
+        
+        .services-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            border: 2px solid #1976d2;
+        }
+        
+        .services-table th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+            font-size: 12pt;
             color: #333;
+            padding: 12px 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        
+        .services-table td {
+            padding: 10px 8px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+        }
+        
+        .services-table tbody tr:nth-child(odd) {
+            background-color: #fafafa;
+        }
+        
+        .services-table tbody tr:hover {
+            background-color: #f0f7ff;
+        }
+        
+        /* Service Name Column */
+        .service-name {
+            font-weight: 600;
+            color: #333;
+            width: 25%;
+        }
+        
+        /* Description Column */
+        .service-description {
+            color: #666;
+            width: 50%;
+            line-height: 1.3;
+        }
+        
+        .service-description em {
+            font-style: italic;
+            color: #999;
+        }
+        
+        /* Amount Column - Enhanced for Display Modes */
+        .service-amount {
+            width: 25%;
+            text-align: center;
+            font-weight: 600;
+            color: #1976d2;
+        }
+        
+        /* Display Mode Specific Styles */
+        .amount-hidden {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .amount-visible {
+            color: #1976d2;
+            font-weight: 600;
+        }
+        
+        /* Package Total Row */
+        .package-total-row {
+            background-color: #e3f2fd !important;
+            font-weight: bold;
+        }
+        
+        .package-total-row td {
+            color: #1976d2;
+            font-weight: bold;
+            border-top: 2px solid #1976d2;
+        }
+        
+        /* Header Section Breaks */
+        .header-break {
+            page-break-before: always;
+            margin-top: 0;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 30px 0 20px 0;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #1976d2;
+        }
+        
+        .section-title {
+            font-size: 22pt;
+            font-weight: bold;
+            color: #1976d2;
+            margin: 0;
+        }
+        
+        /* Total Amount Section */
+        .total-section {
+            background-color: #f8f9fa;
+            border: 3px solid #1976d2;
+            border-top: 4px solid #1976d2;
+            padding: 20px;
+            margin: 25px 0;
             page-break-inside: avoid;
         }
-
-        .subservice-item:last-child {
-            margin-bottom: 0;
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-
-        /* Header Total Section */
-        .header-total {
-            border-top: 3px solid #000;
-            padding: 20px 0;
-            margin-top: 20px;
-            background-color: #f9f9f9;
-        }
-
-        .header-total-content {
-            display: block;
-            width: 100%;
-        }
-
-        .header-total-label {
-            float: left;
-            width: 75%;
+        
+        .total-label {
+            font-size: 16pt;
             font-weight: bold;
-            font-size: 16px;
-            padding-top: 5px;
+            color: #333;
         }
-
-        .header-total-amount {
-            float: right;
-            width: 20%;
-            text-align: right;
+        
+        .total-amount {
+            font-size: 18pt;
             font-weight: bold;
-            font-size: 18px;
+            color: #1976d2;
         }
-
-        .header-total-content:after {
-            content: "";
-            display: table;
-            clear: both;
+        
+        /* Terms Section */
+        .terms-section {
+            background-color: #fafafa;
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            margin: 20px 0;
+            page-break-inside: avoid;
         }
-
-        /* Final Total Section */
-        .final-total-section {
-            margin-top: 30px;
+        
+        .terms-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #1976d2;
+            margin-bottom: 12px;
+        }
+        
+        .terms-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .terms-list li {
+            margin-bottom: 6px;
+            color: #555;
+            line-height: 1.4;
+            padding-left: 15px;
+            position: relative;
+        }
+        
+        .terms-list li::before {
+            content: "•";
+            color: #1976d2;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Footer Section */
+        .footer-section {
+            text-align: center;
+            margin: 20px 0;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+            page-break-inside: avoid;
+        }
+        
+        .reference-number {
+            font-size: 12pt;
+            color: #666;
+        }
+        
+        /* Responsive adjustments */
+        @media print {
+            .display-mode-debug {
+                display: none;
+            }
+            
+            .header-section {
+                margin-bottom: 15px;
+            }
+            
+            .total-section {
+                margin: 20px 0;
+            }
+            
+            .terms-section {
+                margin: 15px 0;
+            }
+        }
+        
+        /* Page Break Helpers */
+        .page-break-before {
             page-break-before: always;
         }
-
-        .final-total-box {
-            border: 3px solid #000;
-            background-color: #f0f8ff;
-            padding: 25px;
-            margin-bottom: 30px;
+        
+        .page-break-after {
+            page-break-after: always;
         }
-
-        .final-total-content {
-            display: block;
-            width: 100%;
+        
+        .no-page-break {
+            page-break-inside: avoid;
         }
-
-        .final-total-label {
-            float: left;
-            width: 70%;
-            font-weight: bold;
-            font-size: 18px;
-            padding-top: 5px;
+        
+        /* Utility Classes */
+        .text-center {
+            text-align: center;
         }
-
-        .final-total-amount {
-            float: right;
-            width: 25%;
+        
+        .text-right {
             text-align: right;
-            font-weight: bold;
-            font-size: 20px;
-        }
-
-        .final-total-content:after {
-            content: "";
-            display: table;
-            clear: both;
-        }
-
-        /* Terms & Conditions */
-        .terms-section {
-            margin-top: 40px;
-            margin-bottom: 30px;
-        }
-
-        .terms-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-
-        .terms-list {
-            padding-left: 20px;
-            margin: 0;
-            list-style-type: disc;
-        }
-
-        .terms-list li {
-            margin-bottom: 8px;
-            line-height: 1.5;
-            font-size: 13px;
-        }
-
-        /* Footer */
-        .footer {
-            border-top: 2px solid #000;
-            padding-top: 15px;
-            margin-top: 30px;
-        }
-
-        .quotation-id {
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        /* Page break utilities for print and PDF */
-        @media print {
-            .header-section {
-                page-break-after: always;
-            }
-            
-            .header-section:last-child {
-                page-break-after: auto;
-            }
-            
-            .final-total-section {
-                page-break-before: always;
-            }
-            
-            .service-entry {
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            
-            .service-entry.large {
-                page-break-before: auto;
-            }
         }
         
-        /* Additional CSS for wkhtmltopdf compatibility */
-        .service-entry {
-            -webkit-break-inside: avoid;
-            -moz-break-inside: avoid;
-            -o-break-inside: avoid;
-            -ms-break-inside: avoid;
+        .font-bold {
+            font-weight: bold;
         }
         
-        .subservices-list {
-            -webkit-break-inside: avoid;
-            -moz-break-inside: avoid;
-            -o-break-inside: avoid;
-            -ms-break-inside: avoid;
+        .color-primary {
+            color: #1976d2;
+        }
+        
+        .color-secondary {
+            color: #666;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Each Header gets its own page -->
-        {% for header in headers %}
-            <div class="header-section page">
-                <!-- Page Watermark -->
+        <!-- Header Section -->
+        <div class="header-section no-page-break">
+            <h1 class="page-title">{{ page_title }}</h1>
+            <div class="logo-container">
                 {% if logo_src %}
-                    <div class="watermark">
-                        <img src="{{ logo_src }}" alt="RERA Easy Watermark">
-                    </div>
+                    <img src="{{ logo_src }}" alt="RERA Easy Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="logo-fallback" style="display: none;">RERAEasy</div>
+                {% else %}
+                    <div class="logo-fallback">RERAEasy</div>
                 {% endif %}
-                
-                <!-- Header with Logo and Title -->
-                <div class="header">
-                    <div class="header-title">{{ header.name.upper() }}</div>
-                    <div class="header-logo">
+            </div>
+        </div>
+
+        <!-- Debug Display Mode (only shown in development) -->
+        {% if display_mode %}
+        <div class="display-mode-debug">
+            Display Mode: {{ display_mode|title }} 
+            {% if display_mode == 'lumpsum' %}
+            (Individual service prices hidden)
+            {% else %}
+            (All prices visible)
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Main Content - Headers and Services -->
+        {% for header_index, header in headers %}
+            {% if header_index > 0 %}
+            <!-- Page break for new sections -->
+            <div class="header-break">
+                <div class="section-header">
+                    <h2 class="section-title">{{ header.name|upper }}</h2>
+                    <div class="logo-container">
                         {% if logo_src %}
-                            <img src="{{ logo_src }}" alt="RERA Easy Logo">
+                            <img src="{{ logo_src }}" alt="RERA Easy Logo" style="height: 60px; width: auto;">
                         {% endif %}
                     </div>
                 </div>
+            </div>
+            {% endif %}
 
-                <!-- Services with Simple Line Layout -->
-                <div class="services-section">
-                    {% for service in header.services %}
-                        <div class="service-entry {% if service.size_class %}{{ service.size_class }}{% endif %}">
-                            <div class="service-header">
-                                <div class="service-name">{{ service.name.upper() }}</div>
-                            </div>
-                            <div class="service-content">
-                                <div class="service-details">
-                                    {% if service.subServices %}
-                                        <ul class="subservices-list">
-                                            {% for sub_service in service.subServices %}
-                                                <li class="subservice-item">{{ sub_service.name }}</li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <ul class="subservices-list">
-                                            <li class="subservice-item">{{ service.name }}</li>
-                                        </ul>
-                                    {% endif %}
-                                </div>
-                                <div class="service-price">
-                                    {% if service.display_price is not none and service.display_price > 0 %}
-                                        Rs. {{ "{:,}".format(service.display_price) }}*
-                                    {% elif service.display_price is not none %}
-                                        Rs. 0*
-                                    {% else %}
-                                        <!-- Blank for packages -->
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Header Total -->
-                <div class="header-total">
-                    <div class="header-total-content">
-                        <div class="header-total-label">Total Payable Amount</div>
-                        <div class="header-total-amount">
-                            {% set header_total = header.services | sum(attribute='price') %}
-                            {% if header.is_package %}
-                                {% if header.package_total and header.package_total > 0 %}
-                                    Rs. {{ "{:,}".format(header.package_total) }}*
-                                {% else %}
-                                    Rs. {{ "{:,}".format(header_total) }}*
-                                {% endif %}
-                            {% else %}
-                                Rs. {{ "{:,}".format(header_total) }}*
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+            <div class="table-section no-page-break">
+                <table class="services-table">
+                    <thead>
+                        <tr>
+                            <th class="text-center">Service</th>
+                            <th class="text-center">Description</th>
+                            <th class="text-center">Amount (Rs.)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for service in header.services %}
+                            {% set outer_loop = loop %}
+                            {% for sub_service in service.subServices if service.subServices else [None] %}
+                                <tr>
+                                    <!-- Service Name Column -->
+                                    <td class="service-name">
+                                        {% if loop.index == 1 %}
+                                            {{ service.name }}
+                                        {% endif %}
+                                    </td>
+                                    
+                                    <!-- Description Column -->
+                                    <td class="service-description">
+                                        {% if sub_service %}
+                                            {{ sub_service.name }}
+                                        {% else %}
+                                            <em>Service details</em>
+                                        {% endif %}
+                                    </td>
+                                    
+                                    <!-- Amount Column - Enhanced for Display Modes -->
+                                    <td class="service-amount">
+                                        {% if loop.index == 1 %}
+                                            {% if display_mode == 'lumpsum' %}
+                                                <!-- Lump Sum Mode: Hide individual service prices -->
+                                                <span class="amount-hidden">-</span>
+                                            {% else %}
+                                                <!-- Bifurcated Mode: Show individual service prices -->
+                                                {% if service.display_price is not none and service.display_price > 0 %}
+                                                    <span class="amount-visible">{{ "{:,.0f}".format(service.display_price) }}*</span>
+                                                {% elif service.price > 0 %}
+                                                    <span class="amount-visible">{{ "{:,.0f}".format(service.price) }}*</span>
+                                                {% else %}
+                                                    <span class="amount-hidden">0*</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+
+                        <!-- Package Total Row (always shown for packages) -->
+                        {% if header.is_package and header.package_total > 0 %}
+                        <tr class="package-total-row">
+                            <td class="font-bold color-primary">{{ header.name }} Total</td>
+                            <td class="font-bold color-secondary">Package Total</td>
+                            <td class="text-center font-bold color-primary">
+                                {{ "{:,.0f}".format(header.package_total) }}*
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
             </div>
         {% endfor %}
 
-        <!-- Final Total Page -->
-        <div class="final-total-section page">
-            <!-- Page Watermark -->
-            {% if logo_src %}
-                <div class="watermark">
-                    <img src="{{ logo_src }}" alt="RERA Easy Watermark">
-                </div>
-            {% endif %}
-            
-            <!-- Header for Final Total Page -->
-            <div class="header">
-                <div class="header-title">QUOTATION SUMMARY</div>
-                <div class="header-logo">
-                    {% if logo_src %}
-                        <img src="{{ logo_src }}" alt="RERA Easy Logo">
-                    {% endif %}
-                </div>
+        <!-- Total Amount Section -->
+        <div class="total-section no-page-break">
+            <div class="total-row">
+                <span class="total-label">Total Payable Amount</span>
+                <span class="total-amount">Rs. {{ "{:,.0f}".format(total_amount) }}*</span>
             </div>
+        </div>
 
-            <!-- Final Total Amount -->
-            <div class="final-total-box">
-                <div class="final-total-content">
-                    <div class="final-total-label">Total Payable Amount</div>
-                    <div class="final-total-amount">Rs. {{ "{:,}".format(total_amount) }}*</div>
-                </div>
-            </div>
+        <!-- Terms & Conditions Section -->
+        {% if terms %}
+        <div class="terms-section">
+            <h3 class="terms-title">Terms & Conditions:</h3>
+            <ul class="terms-list">
+                {% for term in terms %}
+                <li>{{ term }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
 
-            <!-- Terms & Conditions Section -->
-            {% if terms %}
-                <div class="terms-section">
-                    <div class="terms-title">Terms & Conditions:</div>
-                    <ul class="terms-list">
-                        {% for term in terms %}
-                            <li>{{ term }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            <!-- Footer with Quotation ID -->
-            <div class="footer">
-                <div class="quotation-id">{{ ref_number }}</div>
-            </div>
+        <!-- Footer Section -->
+        <div class="footer-section">
+            <div class="reference-number">{{ ref_number }}</div>
         </div>
     </div>
 </body>
