@@ -114,14 +114,33 @@ function QuotationServicesContent() {
         const headers = selectedHeaders.map(({ name, originalName, services = [] }) => {
           const headerData = {
             header: name,
-            services: services.map(({ id, name, label, subServices = {} }) => ({
-              id: id || name,
-              label: label || name,
-              subServices: Object.keys(subServices).map((ss) => ({
-                id: ss,
-                text: ss,
-              })),
-            }))
+            services: services.map((service) => {
+              const { id, name, label, subServices = {}, selectedYears, selectedQuarters, quarterCount, ...otherProps } = service;
+              const transformedService = {
+                id: id || name,
+                label: label || name,
+                subServices: Object.keys(subServices).map((ss) => ({
+                  id: ss,
+                  text: ss,
+                })),
+              };
+              
+              // Include quarter information if present
+              if (selectedYears && selectedYears.length > 0) {
+                transformedService.selectedYears = selectedYears;
+              }
+              if (selectedQuarters && selectedQuarters.length > 0) {
+                transformedService.selectedQuarters = selectedQuarters;
+              }
+              if (quarterCount) {
+                transformedService.quarterCount = quarterCount;
+              }
+              
+              // Include any other properties
+              Object.assign(transformedService, otherProps);
+              
+              return transformedService;
+            })
           };
           
           // Include original name for custom headers

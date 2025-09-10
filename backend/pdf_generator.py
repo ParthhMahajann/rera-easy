@@ -7,11 +7,11 @@ from reportlab.lib.pagesizes import A4
 
 
 class QuotationPDFGenerator:
-    def __init__(self, template_dir="."):
+    def __init__(self, template_dir=".", use_summary_template=False):
         # Template setup
         self.template_dir = os.path.abspath(template_dir)
         self.env = Environment(loader=FileSystemLoader(self.template_dir))
-        self.template_name = "quotation_template.html"
+        self.template_name = "quotation_summary_template.html" if use_summary_template else "quotation_template.html"
 
         # wkhtmltopdf setup (change path if installed elsewhere, or set env WKHTMLTOPDF_PATH)
         default_path = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
@@ -35,6 +35,9 @@ class QuotationPDFGenerator:
             "quiet": "",
             "load-error-handling": "ignore",
             "load-media-error-handling": "ignore",
+            "enable-smart-shrinking": "",              # better page break handling
+            "print-media-type": "",                    # use print CSS rules
+            "disable-smart-shrinking": None,           # disable to respect page breaks
         }
 
     # ---------------- Utility helpers ----------------
@@ -55,6 +58,7 @@ class QuotationPDFGenerator:
         Build HTML from quotation_data, convert to PDF with wkhtmltopdf,
         and merge optional images before/after the generated content.
         """
+        print(f"📄 generate_pdf (OLD) called with template: {self.template_name}")
         base_dir = os.path.dirname(os.path.abspath(__file__))
 
         # ---- Build section rows (header -> lines, subtotal) ----
@@ -100,7 +104,6 @@ class QuotationPDFGenerator:
         default_terms = [
             "The above quotation is subject to this project only.",
             "The prices mentioned above DO NOT include Government Fees.",
-            "18% GST Applicable on above mentioned charges.",
             "The services outlined above are included within the project scope. Any additional services not specified are excluded from this scope.",
         ]
         applicable_terms = [
@@ -152,6 +155,303 @@ class QuotationPDFGenerator:
         except Exception:
             pass
 
+        return filename
+
+    def generate_summary_pdf(self, quotation_data, filename):
+        """
+        Generate PDF using the QuotationSummary template that mirrors the JSX component layout.
+        This method processes the data exactly as it appears in the QuotationSummary.jsx component.
+        """
+        print(f"🚀 generate_summary_pdf called with template: {self.template_name}")
+        print(f"📊 DEBUG: Full quotation_data keys: {list(quotation_data.keys())}")
+        if quotation_data.get("pricingBreakdown"):
+            print(f"📊 DEBUG: pricingBreakdown structure:")
+            for i, breakdown in enumerate(quotation_data["pricingBreakdown"]):
+                print(f"  [{i}]: {breakdown}")
+        else:
+            print(f"📊 DEBUG: No pricingBreakdown found!")
+        
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Process headers exactly as in QuotationSummary.jsx
+        processed_headers = []
+        
+        for header in quotation_data.get("headers", []) or []:
+            header_name = self.safe_string(header.get("name", ""))
+            # Check for Package A, B, C, D specifically
+            is_package = any(pkg in header_name.lower() for pkg in ["package a", "package b", "package c", "package d", "package"])
+            
+            # Process services for this header
+            processed_services = []
+            package_total = 0
+            
+            # Get pricing information from pricingBreakdown (includes edited prices)
+            service_price_map = {}
+            header_price_map = {}
+            
+            if quotation_data.get("pricingBreakdown"):
+                for breakdown in quotation_data["pricingBreakdown"]:
+                    # Map header-level prices (handle both 'name' and 'header' fields)
+                    header_name_key = breakdown.get("name") or breakdown.get("header")
+                    if header_name_key:
+                        total_amount = breakdown.get("totalAmount") or breakdown.get("headerTotal") or breakdown.get("total", 0)
+                        header_price_map[header_name_key.strip()] = self.safe_number(total_amount)
+                    
+                    # Map service-level prices (use finalAmount if available - edited price)
+                    if breakdown.get("services"):
+                        for service in breakdown["services"]:
+                            if service.get("name"):
+                                # Prioritize finalAmount (edited price) over totalAmount
+                                price = service.get("finalAmount") or service.get("totalAmount") or service.get("price", 0)
+                                service_price_map[service["name"].strip()] = self.safe_number(price)
+            
+            # Get package total if this is a package
+            if is_package:
+                print(f"🔍 DEBUG: Processing package '{header_name}'")
+                print(f"🔍 DEBUG: header_price_map: {header_price_map}")
+                
+                # Try to get package total from pricing breakdown
+                package_total = header_price_map.get(header_name.strip(), 0)
+                print(f"🔍 DEBUG: package_total from header_price_map: {package_total}")
+                
+                # If package has services with pricing, sum them up
+                if not package_total and quotation_data.get("pricingBreakdown"):
+                    print(f"🔍 DEBUG: Looking for package breakdown...")
+                    package_breakdown = next((b for b in quotation_data["pricingBreakdown"] 
+                                            if (b.get("name", "").strip() == header_name.strip() or 
+                                                b.get("header", "").strip() == header_name.strip())), None)
+                    print(f"🔍 DEBUG: Found package_breakdown: {package_breakdown}")
+                    if package_breakdown and package_breakdown.get("services"):
+                        services_total = sum(self.safe_number(s.get("finalAmount") or s.get("totalAmount", 0)) 
+                                          for s in package_breakdown["services"])
+                        package_total = services_total
+                        print(f"🔍 DEBUG: Calculated package_total from services: {package_total}")
+                
+                # If still no package total, try to get it from the breakdown's totalAmount
+                if not package_total and quotation_data.get("pricingBreakdown"):
+                    for breakdown in quotation_data["pricingBreakdown"]:
+                        breakdown_name_from_name = breakdown.get("name", "").strip().lower()
+                        breakdown_name_from_header = breakdown.get("header", "").strip().lower()
+                        header_name_lower = header_name.strip().lower()
+                        
+                        if (breakdown_name_from_name == header_name_lower or 
+                            breakdown_name_from_header == header_name_lower or 
+                            breakdown_name_from_name in header_name_lower or 
+                            breakdown_name_from_header in header_name_lower):
+                            # Try headerTotal first, then totalAmount
+                            package_total = self.safe_number(breakdown.get("headerTotal") or breakdown.get("totalAmount", 0))
+                            print(f"🔍 DEBUG: Found package total from breakdown: {package_total}")
+                            break
+                
+                # Final fallback: if still zero, use sum of individual service prices from this header
+                if not package_total:
+                    individual_sum = 0
+                    for svc in header.get("services", []) or []:
+                        svc_name = self.safe_string(svc.get("name", ""))
+                        svc_price = service_price_map.get(svc_name, 0)
+                        if not svc_price:
+                            svc_price = self.safe_number(svc.get("price", 0))
+                        individual_sum += svc_price
+                    package_total = individual_sum
+                    print(f"🔍 DEBUG: Using individual services sum as fallback: {package_total}")
+                
+                print(f"🔍 DEBUG: Final package_total: {package_total}")
+            
+            for service in header.get("services", []) or []:
+                service_name = self.safe_string(service.get("name", ""))
+                
+                # Get service price from pricing breakdown (use edited price if available)
+                service_price = service_price_map.get(service_name, 0)
+                if not service_price:
+                    service_price = self.safe_number(service.get("price", 0))
+                
+                # For packages A, B, C, D - don't show individual service prices
+                display_price = service_price
+                if is_package:
+                    display_price = None  # Hide individual prices for packages
+                
+                # Process subservices
+                sub_services = []
+                for sub in service.get("subServices", []) or []:
+                    if isinstance(sub, dict):
+                        sub_services.append({
+                            "id": sub.get("id", ""),
+                            "name": self.safe_string(sub.get("name", ""))
+                        })
+                    elif isinstance(sub, str):
+                        sub_services.append({
+                            "id": "",
+                            "name": self.safe_string(sub)
+                        })
+                
+                # Determine service size class for page breaking
+                sub_services_count = len(sub_services)
+                service_name_length = len(service_name)
+                
+                # Calculate estimated content size
+                if sub_services_count > 6 or service_name_length > 50:
+                    size_class = "large"
+                elif sub_services_count > 3 or service_name_length > 25:
+                    size_class = "medium"
+                else:
+                    size_class = "small"
+                
+                processed_services.append({
+                    "name": service_name,
+                    "price": service_price,  # Keep actual price for calculations
+                    "display_price": display_price,  # Price to show in template
+                    "subServices": sub_services,
+                    "size_class": size_class
+                })
+            
+            processed_headers.append({
+                "name": header_name,
+                "services": processed_services,
+                "is_package": is_package,
+                "package_total": package_total
+            })
+        
+        # Calculate total amount (use edited prices from pricingBreakdown)
+        total_amount = self.safe_number(quotation_data.get("totalAmount", 0))
+        print(f"💰 DEBUG: totalAmount from quotation_data: {total_amount}")
+        
+        if not total_amount and quotation_data.get("pricingBreakdown"):
+            total_amount = 0
+            print(f"💰 DEBUG: Calculating total from pricingBreakdown...")
+            for breakdown in quotation_data["pricingBreakdown"]:
+                if breakdown.get("services"):
+                    for service in breakdown["services"]:
+                        # Use finalAmount (edited price) if available
+                        price = service.get("finalAmount") or service.get("totalAmount", 0)
+                        safe_price = self.safe_number(price)
+                        total_amount += safe_price
+                        print(f"💰 DEBUG: Adding service price {safe_price}, running total: {total_amount}")
+        
+        print(f"💰 DEBUG: Final calculated total_amount: {total_amount}")
+        
+        # Process terms exactly as in QuotationSummary.jsx
+        terms = []
+        
+        # Generate dynamic terms
+        validity = quotation_data.get("validity") or quotation_data.get("validityPeriod")
+        if validity:
+            validity_str = str(validity).lower()
+            validity_days = 0
+            if "7" in validity_str:
+                validity_days = 7
+            elif "15" in validity_str:
+                validity_days = 15
+            elif "30" in validity_str:
+                validity_days = 30
+            else:
+                import re
+                matches = re.findall(r'\d+', validity_str)
+                if matches:
+                    validity_days = int(matches[0])
+            
+            if validity_days > 0:
+                from datetime import datetime, timedelta
+                base_date = datetime.fromisoformat(quotation_data.get("createdAt", "").replace('Z', '+00:00')) if quotation_data.get("createdAt") else datetime.now()
+                valid_until = base_date + timedelta(days=validity_days)
+                formatted_date = valid_until.strftime("%d/%m/%Y")
+                terms.append(f"The quotation is valid upto {formatted_date}.")
+        
+        # Add payment schedule term
+        payment_schedule = quotation_data.get("paymentSchedule") or quotation_data.get("payment_schedule")
+        if payment_schedule:
+            terms.append(f"{payment_schedule} of the total amount must be paid in advance before commencement of work/service.")
+        
+        # Default terms (respecting user rules about GST)
+        default_terms = [
+            "The above quotation is subject to this project only.",
+            "The prices mentioned above are in particular to One Project per year.",
+            "The services outlined above are included within the project scope. Any additional services not specified are excluded from this scope.",
+            "The prices mentioned above are applicable to One Project only for the duration of the services obtained.",
+            "The prices mentioned above DO NOT include Government Fees.",
+            "The prices mentioned above DO NOT include Edit Fees.",
+            "The prices listed above do not include any applicable statutory taxes.",
+            "Any and all services not mentioned in the above scope of services are not applicable",
+            "All Out-of-pocket expenses incurred for completion of the work shall be re-imbursed to RERA Easy"
+        ]
+        terms.extend(default_terms)
+        
+        # Add applicable terms
+        if quotation_data.get("applicableTerms"):
+            terms_data = {
+                "Package A,B,C": [
+                    "Payment is due at the initiation of services, followed by annual payments thereafter.",
+                    "Any kind of drafting of legal documents or contracts are not applicable.",
+                    "The quoted fee covers annual MahaRERA compliance services, with billing on a Yearly basis for convenience and predictable financial planning.",
+                    "Invoices will be generated at a predetermined interval for each year in advance.",
+                    "The initial invoice will be issued from the date of issuance or a start date as specified in the Work Order."
+                ],
+                "Package D": [
+                    "All Out-of-pocket expenses incurred for the explicit purpose of Commuting, Refreshment meals of RERA Easy's personnel shall be re-imbursed to RERA Easy, subject to submission of relevant invoices, bills and records submitted."
+                ]
+            }
+            
+            for category in quotation_data["applicableTerms"]:
+                if category in terms_data:
+                    terms.extend(terms_data[category])
+        
+        # Add custom terms
+        if quotation_data.get("customTerms"):
+            custom_terms = [self.safe_string(t) for t in quotation_data["customTerms"] if self.safe_string(t)]
+            terms.extend(custom_terms)
+        
+        # Get page title (use first header name or default)
+        page_title = "QUOTATION SUMMARY"
+        if processed_headers:
+            page_title = processed_headers[0]["name"].upper()
+        
+        # Reference number
+        ref_number = self.safe_string(quotation_data.get("id", "REQ 0001"))
+        if not ref_number.upper().startswith("REQ"):
+            ref_number = f"REQ {ref_number}"
+        ref_number = ref_number.replace("REQ ", "").strip()
+        ref_number = f"REQ {ref_number}"
+        
+        # Resolve logo
+        logo_png_path = os.path.join(base_dir, "logo.png")
+        logo_jpg_path = os.path.join(base_dir, "logo.jpg")
+        
+        print(f"Debug: Looking for logo.png at: {logo_png_path}")
+        print(f"Debug: PNG exists: {os.path.exists(logo_png_path)}")
+        print(f"Debug: Looking for logo.jpg at: {logo_jpg_path}")
+        print(f"Debug: JPG exists: {os.path.exists(logo_jpg_path)}")
+        
+        logo_src = self._file_uri(logo_png_path)
+        if logo_src is None:
+            logo_src = self._file_uri(logo_jpg_path)
+        
+        print(f"Debug: Final logo_src: {logo_src}")
+        
+        # Render HTML using the new template
+        template = self.env.get_template(self.template_name)
+        html_out = template.render(
+            page_title=page_title,
+            headers=processed_headers,
+            total_amount=total_amount,
+            terms=terms,
+            ref_number=ref_number,
+            logo_src=logo_src or "",
+            watermark_logo=logo_src or ""  # For watermark usage
+        )
+        
+        # HTML -> PDF
+        temp_pdf = filename.replace(".pdf", "_temp.pdf")
+        pdfkit.from_string(html_out, temp_pdf, configuration=self.config, options=self.wk_options)
+        
+        # Merge optional images
+        self.combine_with_images(temp_pdf, filename)
+        
+        # Cleanup
+        try:
+            if os.path.exists(temp_pdf):
+                os.remove(temp_pdf)
+        except Exception:
+            pass
+        
         return filename
 
     # -------------- Image merge helpers --------------
@@ -232,5 +532,12 @@ class QuotationPDFGenerator:
     def _file_uri(self, path):
         """Return a file:/// URI if the file exists, else None."""
         if os.path.exists(path):
-            return "file:///" + os.path.abspath(path).replace("\\", "/")
+            abs_path = os.path.abspath(path)
+            # Convert Windows path to proper file URI
+            if os.name == 'nt':  # Windows
+                abs_path = abs_path.replace("\\", "/")
+                # Ensure proper file URI format for Windows
+                return f"file:///{abs_path}"
+            else:
+                return f"file://{abs_path}"
         return None

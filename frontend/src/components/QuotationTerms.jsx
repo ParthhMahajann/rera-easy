@@ -179,7 +179,10 @@ const QuotationTerms = () => {
     const fetchQuotationData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/quotations/${id}`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/quotations/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (!response.ok) throw new Error('Failed to fetch quotation');
 
         const quotation = await response.json();

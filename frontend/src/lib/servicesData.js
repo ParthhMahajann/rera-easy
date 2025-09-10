@@ -390,7 +390,7 @@ export const SERVICES = {
     },
     {
       id: "service-addon-4",
-      name: "Architect's Certificate",
+      name: "Architect's Certificate as per Form 1",
       origin: "Add ons",
       requiresYearQuarter: true,
       subServices: [
@@ -400,7 +400,7 @@ export const SERVICES = {
 },
 {
       id: "service-addon-5",
-      name: "Engineer's Certificate",
+      name: "Engineer's Certificate as per Form 2",
       origin: "Add ons",
       requiresYearQuarter: true,
       subServices: [
@@ -410,7 +410,7 @@ export const SERVICES = {
 },
 {
       id: "service-addon-6",
-      name: "Chartered Accountant's Certificate ",
+      name: "Chartered Accountant's Certificate as per Form 3",
       origin: "Add ons",
       requiresYearQuarter: true,
       subServices: [
@@ -420,13 +420,12 @@ export const SERVICES = {
 },
 {
       id: "service-addon-7",
-      name: "Annual Return/Report",
+      name: "Annual Return/Report as per Form 5",
       origin: "Add ons",
       requiresYearOnly: true,
       subServices: [
         { id: "subservice-addon-7-1", name: "Drafting assistance of Form 5 (Annual Report on Statement of Account) as per the Registers, Books & Documents" },
-        { id: "subservice-addon-7-2", name: "Certification of Form 5" },
-
+        { id: "subservice-addon-7-2", name: "Certification of Form 5" }
       ]
 },
 {

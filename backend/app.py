@@ -323,12 +323,13 @@ def get_profile(current_user):
     })
 
 @app.route('/api/quotations', methods=['GET'])
-def get_quotations():
+@token_required
+def get_quotations(current_user):
     try:
         query = Quotation.query.order_by(Quotation.created_at.desc())
         return jsonify({
             'success': True,
-            'data': [q.to_dict() for q in query.all()]
+            'quotations': [q.to_dict() for q in query.all()]
         })
     except Exception as e:
         app.logger.error(f"Get quotations error: {str(e)}")
@@ -384,7 +385,8 @@ def create_quotation(current_user):  # Add current_user parameter
 
 
 @app.route('/api/quotations/calculate-pricing', methods=['POST'])
-def calculate_pricing():
+@token_required
+def calculate_pricing(current_user):
     try:
         data = request.get_json()
         category = data['developerType']
@@ -565,14 +567,34 @@ def download_quotation_pdf(quotation_id):
         if not q:
             return jsonify({'error': 'Quotation not found'}), 404
 
-        pdf_generator = QuotationPDFGenerator()
+        # Check if we should use the enhanced summary template
+        app.logger.info(f"Full request URL: {request.url}")
+        app.logger.info(f"Request args: {dict(request.args)}")
+        summary_param = request.args.get('summary', 'false')
+        app.logger.info(f"Raw summary parameter: '{summary_param}'")
+        use_summary = summary_param.lower() == 'true'
+        app.logger.info(f"use_summary evaluated to: {use_summary}")
+        
+        if use_summary:
+            pdf_generator = QuotationPDFGenerator(use_summary_template=True)
+        else:
+            pdf_generator = QuotationPDFGenerator()
+            
         filename = f"Quotation_{quotation_id}.pdf"
         pdf_dir = 'temp_pdfs'
         filepath = os.path.join(pdf_dir, filename)
         os.makedirs(pdf_dir, exist_ok=True)
 
-        app.logger.debug(f"Generating PDF at: {filepath}")
-        pdf_generator.generate_pdf(q.to_dict(), filepath)
+        app.logger.info(f"Generating PDF at: {filepath} (summary={use_summary})")
+        app.logger.info(f"PDF generator template: {pdf_generator.template_name}")
+        
+        if use_summary:
+            app.logger.info("Using generate_summary_pdf method")
+            pdf_generator.generate_summary_pdf(q.to_dict(), filepath)
+        else:
+            app.logger.info("Using generate_pdf method")
+            pdf_generator.generate_pdf(q.to_dict(), filepath)
+            
         app.logger.debug(f"PDF generated successfully at: {filepath}")
 
         cleanup_temp_pdf(filepath, delay=300)

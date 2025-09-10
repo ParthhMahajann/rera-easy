@@ -86,9 +86,11 @@ export default function Dashboard() {
 
   const fetchQuotations = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/quotations");
+      const res = await fetch("http://localhost:3001/api/quotations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
-      if (res.ok) setQuotations(data.data);
+      if (res.ok) setQuotations(data.quotations || data.data);
     } catch (error) {
       console.error("Failed to fetch quotations:", error);
     }
@@ -238,7 +240,7 @@ export default function Dashboard() {
     try {
       console.log(`Starting download for quotation: ${quotation.id}`);
       const response = await fetch(
-        `http://localhost:3001/api/quotations/${quotation.id}/download-pdf`,
+        `http://localhost:3001/api/quotations/${quotation.id}/download-pdf?summary=true`,
         {
           method: 'GET',
           headers: {

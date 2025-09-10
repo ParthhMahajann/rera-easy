@@ -94,13 +94,14 @@ const mergePricingData = (headers, pricingBreakdown) => {
     if (breakdown.services && Array.isArray(breakdown.services)) {
       breakdown.services.forEach(service => {
         if (service.name) {
-          const price = service.totalAmount || service.price || service.amount || service.cost || 0;
+          // FIXED: Use finalAmount (edited price) if available, otherwise fallback to original amounts
+          const price = service.finalAmount || service.totalAmount || service.price || service.amount || service.cost || 0;
           servicePriceMap.set(service.name.trim(), price);
           
           // Also try with normalized name (remove extra spaces, case insensitive)
           const normalizedName = service.name.replace(/\s+/g, ' ').trim();
           servicePriceMap.set(normalizedName, price);
-          console.log(`Found service price: ${service.name} -> ${price}`);
+          console.log(`Found service price: ${service.name} -> ${price} (finalAmount: ${service.finalAmount})`);
         }
       });
     }
@@ -118,7 +119,7 @@ const mergePricingData = (headers, pricingBreakdown) => {
     const updatedServices = header.services?.map(service => {
       let price = service.price || service.totalAmount || service.amount || service.cost || 0;
       
-      // If no price found, try to get from breakdown
+      // If no price found, try to get from breakdown (which now includes edited prices)
       if (price === 0) {
         price = servicePriceMap.get(service.name) || 
                 servicePriceMap.get(service.name?.trim()) ||
@@ -231,7 +232,10 @@ const QuotationSummary = () => {
     const fetchQuotation = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/quotations/${id}`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/quotations/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (!response.ok) throw new Error('Failed to fetch quotation');
         
         const payload = await response.json();
@@ -242,6 +246,23 @@ const QuotationSummary = () => {
         console.log('Raw quotation data:', rawData);
         console.log('Raw pricing breakdown:', rawData.pricingBreakdown);
         console.log('Raw total amount:', rawData.totalAmount);
+        
+        // DEBUGGING: Check if edited prices are available
+        if (rawData.pricingBreakdown && Array.isArray(rawData.pricingBreakdown)) {
+          console.log('=== EDITED PRICING DEBUG ===');
+          rawData.pricingBreakdown.forEach((breakdown, idx) => {
+            console.log(`Breakdown ${idx}: ${breakdown.header || breakdown.name}`);
+            if (breakdown.services && Array.isArray(breakdown.services)) {
+              breakdown.services.forEach((service, sidx) => {
+                console.log(`  Service ${sidx}: ${service.name}`);
+                console.log(`    - totalAmount: ${service.totalAmount}`);
+                console.log(`    - finalAmount: ${service.finalAmount}`);
+                console.log(`    - Will use: ${service.finalAmount || service.totalAmount}`);
+              });
+            }
+          });
+          console.log('=== END EDITED PRICING DEBUG ===');
+        }
         
         // Try to get pricing from pricingBreakdown if service prices are missing
         if (rawData.pricingBreakdown && Array.isArray(rawData.pricingBreakdown)) {
@@ -382,50 +403,29 @@ const QuotationSummary = () => {
     if (id) fetchQuotation();
   }, [id]);
 
-  const handleDownload = () => {
-    if (!quotation) return;
-
-    const quotationData = {
-      id: quotation.id,
-      projectDetails: {
-        developerName: quotation.developerName,
-        projectName: quotation.projectName,
-        developerType: quotation.developerType,
-        projectRegion: quotation.projectRegion,
-        plotArea: quotation.plotArea,
-        validity: quotation.validity,
-        paymentSchedule: quotation.paymentSchedule,
-        reraNumber: quotation.reraNumber
-      },
-      services: quotation.headers?.map(h => ({
-        id: h.id,
-        name: h.name,
-        services: h.services?.map(s => ({
-          id: s.id,
-          name: s.name,
-          price: s.price,
-          subServices: s.subServices?.map(ss => ({
-            id: ss.id,
-            name: ss.name
-          })) || []
-        })) || []
-      })) || [],
-      pricing: quotation.pricingBreakdown || [],
-      totalAmount: quotation.totalAmount || 0,
-      createdAt: quotation.createdAt
-    };
-
-    const blob = new Blob([JSON.stringify(quotationData, null, 2)], {
-      type: 'application/json'
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `quotation-${quotation.id || 'export'}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleDownload = async () => {
+    if (!id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/quotations/${id}/download-pdf?summary=true`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Quotation_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('PDF download error:', e);
+    }
   };
 
   const handleCompleteQuotation = () => {
@@ -433,6 +433,27 @@ const QuotationSummary = () => {
   };
 
   const calculateTotalAmount = () => {
+    // FIXED: First try to use stored totalAmount from pricing, then calculate from services
+    if (quotation?.totalAmount) {
+      return quotation.totalAmount;
+    }
+    
+    // If pricing breakdown is available, use edited prices from there
+    if (quotation?.pricingBreakdown && Array.isArray(quotation.pricingBreakdown)) {
+      return quotation.pricingBreakdown.reduce((total, breakdown) => {
+        if (breakdown.services && Array.isArray(breakdown.services)) {
+          const headerTotal = breakdown.services.reduce((sum, service) => {
+            // Use finalAmount (edited price) if available
+            const servicePrice = service.finalAmount || service.totalAmount || service.price || service.amount || 0;
+            return sum + servicePrice;
+          }, 0);
+          return total + headerTotal;
+        }
+        return total;
+      }, 0);
+    }
+    
+    // Fallback: calculate from header services
     if (!quotation?.headers) return 0;
     
     return quotation.headers.reduce((total, header) => {
@@ -503,7 +524,7 @@ const QuotationSummary = () => {
           {/* RERA Easy Logo */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <img 
-              src="/api/logo.jpg" 
+              src="/api/logo.png" 
               alt="RERA Easy Logo" 
               style={{ 
                 height: '60px', 
@@ -511,9 +532,12 @@ const QuotationSummary = () => {
                 marginRight: '8px'
               }} 
               onError={(e) => {
-                // Fallback if logo doesn't load
-                e.target.style.display = 'none';
-                e.target.nextSibling.style.display = 'flex';
+                // Fallback if PNG logo doesn't load, try JPG
+                e.target.src = '/api/logo.jpg';
+                e.target.onerror = () => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                };
               }}
             />
             <Box sx={{ 
@@ -578,6 +602,11 @@ const QuotationSummary = () => {
                       console.log(`  - name: '${breakdown.name}'`);
                       console.log(`  - totalAmount: ${breakdown.totalAmount}`);
                       console.log(`  - total: ${breakdown.total}`);
+                      if (breakdown.services && Array.isArray(breakdown.services)) {
+                        breakdown.services.forEach(s => {
+                          console.log(`    Service: ${s.name}, finalAmount: ${s.finalAmount}, totalAmount: ${s.totalAmount}`);
+                        });
+                      }
                     });
                     
                     const packageBreakdown = quotation.pricingBreakdown.find(b => {
@@ -588,11 +617,21 @@ const QuotationSummary = () => {
                     });
                     
                     if (packageBreakdown) {
-                      packageTotalPrice = packageBreakdown.totalAmount || 
-                                         packageBreakdown.total || 
-                                         packageBreakdown.amount ||
-                                         packageBreakdown.price || 0;
-                      console.log(`Found package breakdown! Price: ${packageTotalPrice}`);
+                      // FIXED: Use the sum of finalAmount from services if available (edited prices)
+                      if (packageBreakdown.services && Array.isArray(packageBreakdown.services)) {
+                        packageTotalPrice = packageBreakdown.services.reduce((sum, service) => {
+                          const servicePrice = service.finalAmount || service.totalAmount || service.price || service.amount || 0;
+                          return sum + servicePrice;
+                        }, 0);
+                        console.log(`Calculated package price from services finalAmount: ${packageTotalPrice}`);
+                      } else {
+                        // Fallback to header-level totals
+                        packageTotalPrice = packageBreakdown.totalAmount || 
+                                           packageBreakdown.total || 
+                                           packageBreakdown.amount ||
+                                           packageBreakdown.price || 0;
+                        console.log(`Using header-level package price: ${packageTotalPrice}`);
+                      }
                     }
                   }
                   
@@ -729,14 +768,18 @@ const QuotationSummary = () => {
                           {/* RERA Easy Logo */}
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <img 
-                              src="/api/logo.jpg" 
+                              src="/api/logo.png" 
                               alt="RERA Easy Logo" 
                               style={{ 
                                 height: '60px', 
                                 width: 'auto'
                               }} 
                               onError={(e) => {
-                                e.target.style.display = 'none';
+                                // Fallback to JPG if PNG fails
+                                e.target.src = '/api/logo.jpg';
+                                e.target.onerror = () => {
+                                  e.target.style.display = 'none';
+                                };
                               }}
                             />
                           </Box>

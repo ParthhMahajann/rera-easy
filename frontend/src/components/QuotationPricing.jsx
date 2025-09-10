@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { calculatePricing } from '../services/quotations';
 import {
   Box,
   Typography,
@@ -56,29 +57,22 @@ const QuotationPricing = () => {
     const fetchQuotationAndPricing = async () => {
       try {
         setLoading(true);
-        const quotationResponse = await fetch(`/api/quotations/${id}`);
+        const quotationResponse = await fetch(`/api/quotations/${id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
         if (!quotationResponse.ok) throw new Error("Failed to fetch quotation");
 
         const quotation = await quotationResponse.json();
         setQuotationData(quotation.data);
 
-        const pricingResponse = await fetch(
-          "/api/quotations/calculate-pricing",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              developerType: quotation.data.developerType,
-              projectRegion: quotation.data.projectRegion,
-              plotArea: quotation.data.plotArea,
-              headers: quotation.data.headers || [],
-            }),
-          }
-        );
-
-        if (!pricingResponse.ok) throw new Error("Failed to calculate pricing");
-
-        const pricingData = await pricingResponse.json();
+        const pricingData = await calculatePricing({
+          developerType: quotation.data.developerType,
+          projectRegion: quotation.data.projectRegion,
+          plotArea: quotation.data.plotArea,
+          headers: quotation.data.headers || [],
+        });
 
         const initialPricingBreakdown = pricingData.breakdown.map((header) => ({
           ...header,
@@ -295,6 +289,40 @@ const QuotationPricing = () => {
                   <Typography fontWeight={600} variant="h6" gutterBottom color="text.primary">
                     {service.name}
                   </Typography>
+                  
+                  {/* Time-based Pricing Info */}
+                  {service.requiresYearQuarter && service.quarterCount && service.basePrice && (
+                    <Box sx={{ 
+                      mb: 2, 
+                      p: 1.5, 
+                      backgroundColor: '#e3f2fd', 
+                      borderRadius: 1,
+                      border: '1px solid #1976d2'
+                    }}>
+                      <Typography variant="caption" color="primary" fontWeight={600} display="block">
+                        Quarter-based Pricing:
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Base Price: ₹{service.basePrice?.toLocaleString()} × {service.quarterCount} quarter{service.quarterCount !== 1 ? 's' : ''} = ₹{(service.basePrice * service.quarterCount)?.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+                  {service.requiresYearOnly && service.yearCount && service.basePrice && (
+                    <Box sx={{ 
+                      mb: 2, 
+                      p: 1.5, 
+                      backgroundColor: '#e8f5e8', 
+                      borderRadius: 1,
+                      border: '1px solid #4caf50'
+                    }}>
+                      <Typography variant="caption" color="success.main" fontWeight={600} display="block">
+                        Year-based Pricing:
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Base Price: ₹{service.basePrice?.toLocaleString()} × {service.yearCount} year{service.yearCount !== 1 ? 's' : ''} = ₹{(service.basePrice * service.yearCount)?.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                   
                   {/* Pricing Row */}
                   <Stack 

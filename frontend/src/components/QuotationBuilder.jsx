@@ -811,12 +811,20 @@ export default function QuotationBuilder({ onComplete, onServicesChange, quotati
           ? service.subServices.filter(sub => selectedSubs.includes(sub.id))
           : [];
         
-        return {
+        const serviceResult = {
           ...service,
           selectedSubServices: selectedSubServicesList,
           selectedYears: selectedYears[serviceKey] || [],
           selectedQuarters: selectedQuarters[serviceKey] || []
         };
+        
+        // Add quarter count for services that require quarter-based pricing
+        if (service.requiresYearQuarter) {
+          const quarterCount = selectedQuarters[serviceKey]?.length || 1;
+          serviceResult.quarterCount = quarterCount;
+        }
+        
+        return serviceResult;
       })
     }));
 
