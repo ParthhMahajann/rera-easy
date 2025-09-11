@@ -15,13 +15,15 @@ import QuotationPricing from './components/QuotationPricing';
 import QuotationTerms from './components/QuotationTerms';
 import QuotationSummary from './components/QuotationSummary';
 import QuotationView from './pages/QuotationView';
+import { DisplayModeProvider } from './context/DisplayModeContext';
 
 function App() {
   const token = localStorage.getItem('token');
   
   return (
-    <BrowserRouter>
-      <Toaster position="top-right" />
+    <DisplayModeProvider>
+      <BrowserRouter>
+        <Toaster position="top-right" />
       <Routes>
         {/* Root route - redirect based on auth status */}
         <Route 
@@ -134,7 +136,8 @@ function App() {
           element={<Navigate to={token ? "/dashboard" : "/login"} replace />} 
         />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </DisplayModeProvider>
   );
 }
 

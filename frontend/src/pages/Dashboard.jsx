@@ -47,6 +47,7 @@ import {
   Warning as WarningIcon
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
+import { useDisplayMode } from '../context/DisplayModeContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -61,6 +62,9 @@ export default function Dashboard() {
   // Single unified search state
   const [unifiedSearch, setUnifiedSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  
+  // Use display mode context for synchronized PDF downloads
+  const { getDisplayModeForAPI, displayMode, getDisplayModeLabel, getDisplayModeDescription } = useDisplayMode();
 
   const role = localStorage.getItem("role");
   const token = localStorage.getItem("token");
@@ -239,8 +243,13 @@ export default function Dashboard() {
   const handleDownloadQuotation = async (quotation) => {
     try {
       console.log(`Starting download for quotation: ${quotation.id}`);
+      
+      // Get current display mode from context for synchronized experience
+      const displayModeParam = getDisplayModeForAPI();
+      console.log(`Using display mode: ${displayModeParam}`);
+      
       const response = await fetch(
-        `http://localhost:3001/api/quotations/${quotation.id}/download-pdf?summary=true`,
+        `http://localhost:3001/api/quotations/${quotation.id}/download-pdf?summary=true&displayMode=${displayModeParam}`,
         {
           method: 'GET',
           headers: {
@@ -272,7 +281,7 @@ export default function Dashboard() {
         window.URL.revokeObjectURL(url);
       }, 1000);
 
-      console.log('PDF download initiated successfully');
+      console.log(`PDF download initiated successfully with display mode: ${displayModeParam}`);
     } catch (error) {
       console.error('Download failed:', error);
       alert(`Failed to download quotation PDF: ${error.message}`);
@@ -544,12 +553,27 @@ export default function Dashboard() {
             />
           </Grid>
           <Grid item xs={12} md={4}>
-            {unifiedSearch && (
-              <Alert severity="info" sx={{ py: 0.5 }}>
-                Showing {filteredAndSortedData.length} of{" "}
-                {activeTab === 1 ? pending.length : quotations.length} quotations
-              </Alert>
-            )}
+            <Stack direction="row" spacing={2} justifyContent="flex-end" alignItems="center">
+              {unifiedSearch && (
+                <Alert severity="info" sx={{ py: 0.5 }}>
+                  Showing {filteredAndSortedData.length} of{" "}
+                  {activeTab === 1 ? pending.length : quotations.length} quotations
+                </Alert>
+              )}
+              <Tooltip title={`PDF downloads will use: ${getDisplayModeDescription()}`}>
+                <Chip
+                  label={`PDF Mode: ${getDisplayModeLabel()}`}
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                  sx={{ 
+                    fontSize: '0.75rem',
+                    height: 28,
+                    backgroundColor: displayMode === 'lumpsum' ? 'rgba(25, 118, 210, 0.04)' : 'rgba(25, 118, 210, 0.08)'
+                  }}
+                />
+              </Tooltip>
+            </Stack>
           </Grid>
         </Grid>
       </Paper>

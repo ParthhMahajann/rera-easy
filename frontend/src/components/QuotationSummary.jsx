@@ -26,6 +26,7 @@ import {
   CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 import { SERVICES } from '../lib/servicesData';
+import { useDisplayMode } from '../context/DisplayModeContext';
 
 /**
  * QuotationSummary.jsx - Enhanced with Display Mode Selection
@@ -237,8 +238,8 @@ const QuotationSummary = () => {
   const [error, setError] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState([]);
   
-  // NEW: State for display mode selection
-  const [displayMode, setDisplayMode] = useState('bifurcated'); // 'lumpsum' or 'bifurcated'
+  // Use global display mode context
+  const { displayMode, setDisplayMode, getDisplayModeForAPI } = useDisplayMode();
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -423,7 +424,9 @@ const QuotationSummary = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`/api/quotations/${id}/download-pdf?summary=true`, {
+      // Include display mode in the download URL
+      const displayModeParam = getDisplayModeForAPI();
+      const res = await fetch(`/api/quotations/${id}/download-pdf?summary=true&displayMode=${displayModeParam}`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -441,6 +444,8 @@ const QuotationSummary = () => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      
+      console.log(`Downloaded PDF with display mode: ${displayModeParam}`);
     } catch (e) {
       console.error('PDF download error:', e);
     }
