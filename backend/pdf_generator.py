@@ -446,6 +446,7 @@ class QuotationPDFGenerator:
         # **ENHANCED: Render HTML using the new template with display mode support**
         template = self.env.get_template(self.template_name)
         html_out = template.render(
+            quotation_data=quotation_data,
             page_title=page_title,
             headers=processed_headers,
             total_amount=total_amount,

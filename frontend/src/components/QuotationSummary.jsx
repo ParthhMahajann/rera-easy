@@ -305,6 +305,12 @@ const QuotationSummary = () => {
 
         setQuotation(normalized);
 
+        // **NEW: Set display mode from saved quotation data**
+        if (rawData.displayMode) {
+          setDisplayMode(rawData.displayMode);
+          console.log(`Loaded quotation with saved display mode: ${rawData.displayMode}`);
+        }
+
         // Extract accepted terms from the quotation data
         const allAcceptedTerms = [];
         const termsCategories = new Map();
@@ -424,9 +430,21 @@ const QuotationSummary = () => {
 
     try {
       const token = localStorage.getItem('token');
-      // Include display mode in the download URL
-      const displayModeParam = getDisplayModeForAPI();
-      const res = await fetch(`/api/quotations/${id}/download-pdf?summary=true&displayMode=${displayModeParam}`, {
+      
+      // First save the current display mode
+      await fetch(`/api/quotations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          displayMode: displayMode
+        })
+      });
+
+      // Now download PDF - it will use the saved display mode
+      const res = await fetch(`/api/quotations/${id}/download-pdf?summary=true`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -445,14 +463,38 @@ const QuotationSummary = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
       
-      console.log(`Downloaded PDF with display mode: ${displayModeParam}`);
+      console.log(`Downloaded PDF with saved display mode: ${displayMode}`);
     } catch (e) {
       console.error('PDF download error:', e);
     }
   };
 
-  const handleCompleteQuotation = () => {
-    navigate('/dashboard');
+  const handleCompleteQuotation = async () => {
+    if (!id) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Save the current display mode to the quotation
+      await fetch(`/api/quotations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          displayMode: displayMode,
+          status: 'completed'
+        })
+      });
+
+      console.log(`Quotation ${id} completed with display mode: ${displayMode}`);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error completing quotation:', error);
+      // Still navigate even if the update fails
+      navigate('/dashboard');
+    }
   };
 
   const calculateTotalAmount = () => {

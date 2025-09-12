@@ -147,6 +147,7 @@ class Quotation(db.Model):
     requires_approval = db.Column(db.Boolean, default=False)
     approved_by = db.Column(db.String(100))
     approved_at = db.Column(db.DateTime)
+    display_mode = db.Column(db.String(20), default='bifurcated')
 
     def to_dict(self):
         effective_discount = (
@@ -181,7 +182,8 @@ class Quotation(db.Model):
             'customTerms': self.custom_terms or [],
             'requiresApproval': self.requires_approval,
             'approvedBy': self.approved_by,
-            'approvedAt': self.approved_at.isoformat() if self.approved_at else None
+            'approvedAt': self.approved_at.isoformat() if self.approved_at else None,
+            'displayMode': self.display_mode or 'bifurcated'
         }
 
 def role_required(*roles):
@@ -450,6 +452,11 @@ def update_quotation(current_user, quotation_id):
             else:
                 q.applicable_terms = []
                 flag_modified(q, 'applicable_terms')
+        
+        # **NEW: Save display mode when provided**
+        if 'displayMode' in data:
+            q.display_mode = data['displayMode']
+            app.logger.info(f"Updated display mode for {quotation_id} to: {data['displayMode']}")
 
         has_package_approval = requires_approval_due_to_packages(q.headers or [])
         has_customized_header_approval = requires_approval_due_to_customized_header(q.headers or [])
@@ -502,15 +509,16 @@ def download_quotation_pdf(quotation_id):
         if not q:
             return jsonify({'error': 'Quotation not found'}), 404
 
-        # **ENHANCED: Support for display mode parameter**
+        # **ENHANCED: Use saved display mode from database**
         app.logger.info(f"Full request URL: {request.url}")
         app.logger.info(f"Request args: {dict(request.args)}")
         
         summary_param = request.args.get('summary', 'false')
-        display_mode = request.args.get('displayMode', 'bifurcated')  # NEW: Get display mode
+        # **NEW: Use saved display mode from quotation, not from URL parameter**
+        display_mode = q.display_mode or 'bifurcated'
         
         app.logger.info(f"Raw summary parameter: '{summary_param}'")
-        app.logger.info(f"Display mode parameter: '{display_mode}'")
+        app.logger.info(f"Using saved display mode: '{display_mode}' from quotation {quotation_id}")
         
         use_summary = summary_param.lower() == 'true'
         app.logger.info(f"use_summary evaluated to: {use_summary}")
