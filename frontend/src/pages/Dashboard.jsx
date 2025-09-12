@@ -29,7 +29,6 @@ import {
   Grid,
   Card,
   CardContent,
-  Divider
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -41,17 +40,13 @@ import {
   PersonAdd as PersonAddIcon,
   Logout as LogoutIcon,
   Search as SearchIcon,
-  Dashboard as DashboardIcon,
-  TrendingUp as TrendingUpIcon,
-  Assignment as AssignmentIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
 } from "@mui/icons-material";
-import { alpha } from "@mui/material/styles";
-import { useDisplayMode } from '../context/DisplayModeContext';
-
+import { useDisplayMode } from "../context/DisplayModeContext";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+
   const [quotations, setQuotations] = useState([]);
   const [pending, setPending] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
@@ -60,18 +55,68 @@ export default function Dashboard() {
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [approvalAction, setApprovalAction] = useState("approve");
 
-
-  // Single unified search state
   const [unifiedSearch, setUnifiedSearch] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  
-  // Use display mode context for synchronized PDF downloads
-  const { getDisplayModeForAPI, displayMode, getDisplayModeLabel, getDisplayModeDescription } = useDisplayMode();
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
-
+  const { getDisplayModeForAPI, getDisplayModeDescription } = useDisplayMode();
   const role = localStorage.getItem("role");
   const token = localStorage.getItem("token");
 
+  // The core function that decides if the quotation should show "Completed" status
+  const shouldBeCompleteStatus = (quotation) => {
+    const discountWithinThreshold =
+      quotation.effectiveDiscountPercent <= (user?.threshold || 0);
+
+    const noCustomTerms = !quotation.customTerms || quotation.customTerms.length === 0;
+
+    // Check specifically for add-on services within headers
+    const hasAddonServices = quotation.headers?.some((header) =>
+      header.services?.some((service) => {
+        const serviceId = service.id || "";
+        return serviceId.startsWith("service-addon-");
+      })
+    );
+
+    const hasCustomizedHeader = quotation.headers?.some((header) => {
+      const headerName = header.header?.toLowerCase() || "";
+      const hasServices = header.services && header.services.length > 0;
+      return headerName.includes("customized") && hasServices;
+    });
+
+    const noApprovalServices = !hasAddonServices && !hasCustomizedHeader;
+
+    return discountWithinThreshold && noCustomTerms && noApprovalServices;
+  };
+
+  // Status Chip component, overrides status to 'Completed' based on the above function
+  const getStatusChip = (status, quotation = null) => {
+    let displayStatus = status;
+    if (quotation && shouldBeCompleteStatus(quotation)) {
+      displayStatus = "completed";
+    }
+
+    const statusConfig = {
+      completed: { label: "Completed", color: "success" },
+      approved: { label: "Approved", color: "success" },
+      rejected: { label: "Rejected", color: "error" },
+      pending_approval: { label: "Pending", color: "warning" },
+      draft: { label: "Draft", color: "default" },
+    };
+
+    const config = statusConfig[displayStatus] || {
+      label: displayStatus,
+      color: "default",
+    };
+
+    return (
+      <Chip
+        label={config.label}
+        color={config.color}
+        size="small"
+        variant="filled"
+      />
+    );
+  };
 
   const fetchProfile = async () => {
     if (token) {
@@ -92,7 +137,6 @@ export default function Dashboard() {
     }
   };
 
-
   const fetchQuotations = async () => {
     try {
       const res = await fetch("http://localhost:3001/api/quotations", {
@@ -104,7 +148,6 @@ export default function Dashboard() {
       console.error("Failed to fetch quotations:", error);
     }
   };
-
 
   const fetchPending = async () => {
     if (role === "admin" || role === "manager") {
@@ -124,17 +167,13 @@ export default function Dashboard() {
     }
   };
 
-
-  // Enhanced unified search functionality
+  // Unified search with filter and sort
   const filteredAndSortedData = useMemo(() => {
     let data = activeTab === 1 ? pending : quotations;
 
-
-    // Apply unified search across ALL columns
     if (unifiedSearch) {
       const searchLower = unifiedSearch.toLowerCase();
-      data = data.filter(q => {
-        // Define all searchable fields
+      data = data.filter((q) => {
         const searchableFields = [
           q.id?.toString(),
           q.projectName,
@@ -144,71 +183,65 @@ export default function Dashboard() {
           q.createdBy,
           q.approvedBy,
           q.totalAmount?.toString(),
-          // Search in services
-          ...(q.headers || []).flatMap(header =>
-            (header.services || []).map(service => service.name || service.serviceName)
-          )
+          ...(q.headers || []).flatMap((header) =>
+            (header.services || []).map((service) => service.name || service.serviceName)
+          ),
         ];
 
-
-        // Combine all searchable text
         const searchableText = searchableFields
-          .filter(field => field != null && field !== undefined)
-          .join(' ')
+          .filter((field) => field != null && field !== undefined)
+          .join(" ")
           .toLowerCase();
-
 
         return searchableText.includes(searchLower);
       });
     }
 
-
-    // Apply sorting
     if (sortConfig.key) {
       data = [...data].sort((a, b) => {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
 
-
-        if (sortConfig.key === 'createdAt') {
+        if (sortConfig.key === "createdAt") {
           aValue = new Date(aValue);
           bValue = new Date(bValue);
-        } else if (sortConfig.key === 'totalAmount' || sortConfig.key === 'effectiveDiscountPercent') {
+        } else if (
+          sortConfig.key === "totalAmount" ||
+          sortConfig.key === "effectiveDiscountPercent"
+        ) {
           aValue = Number(aValue) || 0;
           bValue = Number(bValue) || 0;
         } else {
-          aValue = String(aValue || '').toLowerCase();
-          bValue = String(bValue || '').toLowerCase();
+          aValue = String(aValue || "").toLowerCase();
+          bValue = String(bValue || "").toLowerCase();
         }
-
 
         if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+          return sortConfig.direction === "asc" ? -1 : 1;
         }
         if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+          return sortConfig.direction === "asc" ? 1 : -1;
         }
         return 0;
       });
     }
 
-
     return data;
   }, [quotations, pending, activeTab, unifiedSearch, sortConfig]);
 
-
   const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
 
-
   const handleApprovalClick = (quotation, action) => {
     if (role === "manager" && quotation.effectiveDiscountPercent > user?.threshold) {
-      alert(`Cannot ${action} - discount ${quotation.effectiveDiscountPercent}% exceeds your limit of ${user.threshold}%`);
+      alert(
+        `Cannot ${action} - discount ${quotation.effectiveDiscountPercent}% exceeds your limit of ${user.threshold}%`
+      );
       return;
     }
     setSelectedQuotation(quotation);
@@ -216,10 +249,8 @@ export default function Dashboard() {
     setShowApprovalModal(true);
   };
 
-
   const handleConfirmApproval = async () => {
     if (!selectedQuotation) return;
-
 
     try {
       const res = await fetch(
@@ -234,13 +265,13 @@ export default function Dashboard() {
         }
       );
 
-
       const data = await res.json();
       if (res.ok) {
         fetchPending();
         fetchQuotations();
         setShowApprovalModal(false);
         setSelectedQuotation(null);
+        alert(`Quotation ${approvalAction}d successfully!`);
       } else {
         alert(data.error || `Failed to ${approvalAction} quotation`);
       }
@@ -250,234 +281,152 @@ export default function Dashboard() {
     }
   };
 
-
   const handleViewQuotation = (quotationId) => {
     navigate(`/quotations/${quotationId}/view`);
   };
-
 
   const handleEditQuotation = (quotationId) => {
     navigate(`/quotations/${quotationId}/services`);
   };
 
-
   const handleDownloadQuotation = async (quotation) => {
     try {
       console.log(`Starting download for quotation: ${quotation.id}`);
-      
-      // Get current display mode from context for synchronized experience
+
+      // Block download if pending
+      if (quotation.status === "pending_approval" || quotation.status === "pending") {
+        alert(
+          `❌ Cannot download PDF for ${quotation.id}\n\nReason: Quotation is currently ${quotation.status}.\nPDF download is not allowed until approval is completed.`
+        );
+        return;
+      }
+
       const displayModeParam = getDisplayModeForAPI();
       console.log(`Using display mode: ${displayModeParam}`);
-      
+
       const response = await fetch(
         `http://localhost:3001/api/quotations/${quotation.id}/download-pdf?summary=true&displayMode=${displayModeParam}`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
-
       if (!response.ok) {
         const errorData = await response.json();
+        if (response.status === 403 && errorData.status) {
+          alert(`❌ ${errorData.error}\n\n${errorData.message}`);
+          return;
+        }
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/pdf')) {
-        throw new Error('Response is not a PDF file');
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/pdf")) {
+        throw new Error("Response is not a PDF file");
       }
 
-
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-      const link = document.createElement('a');
+      const url = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      const link = document.createElement("a");
       link.href = url;
       link.download = `Quotation_${quotation.id}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
       }, 1000);
 
-
       console.log(`PDF download initiated successfully with display mode: ${displayModeParam}`);
     } catch (error) {
-      console.error('Download failed:', error);
+      console.error("Download failed:", error);
       alert(`Failed to download quotation PDF: ${error.message}`);
     }
   };
 
-
-  // Enhanced service summary with better display
   const getServicesSummary = (quotation) => {
     if (!quotation.headers || quotation.headers.length === 0) {
       return { summary: "No services selected", fullText: "No services selected", count: 0 };
     }
 
-
     const totalServices = quotation.headers.reduce((total, header) => {
       return total + (header.services ? header.services.length : 0);
     }, 0);
 
-
     const serviceNames = quotation.headers
-      .filter(header => header.services && header.services.length > 0)
-      .flatMap(header =>
-        header.services.map(service => service.name || service.serviceName)
-      )
+      .filter((header) => header.services && header.services.length > 0)
+      .flatMap((header) => header.services.map((service) => service.name || service.serviceName))
       .filter(Boolean);
 
-
-    const summary = serviceNames.length > 0
-      ? `${serviceNames[0]}${serviceNames.length > 1 ? ` +${serviceNames.length - 1} more` : ''}`
-      : `${totalServices} service${totalServices !== 1 ? 's' : ''}`;
-
+    const summary =
+      serviceNames.length > 0
+        ? `${serviceNames[0]}${serviceNames.length > 1 ? ` +${serviceNames.length - 1} more` : ""}`
+        : `${totalServices} service${totalServices !== 1 ? "s" : ""}`;
 
     return {
       summary: summary,
-      fullText: serviceNames.join(', '),
-      count: totalServices
+      fullText: serviceNames.join(", "),
+      count: totalServices,
     };
   };
-
 
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login");
   };
 
-
   const handleCreateUser = () => {
     navigate("/signup");
   };
-
 
   const handleCreateQuotation = () => {
     navigate("/quotations/new");
   };
 
-
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
 
-
   const getApprovalReasons = (quotation) => {
     const reasons = [];
-    const hasPackages = quotation.headers?.some(header =>
-      header.header &&
-      header.header.toLowerCase().includes('package') &&
-      header.services &&
-      header.services.length > 0
+    const hasPackages = quotation.headers?.some(
+      (header) =>
+        header.header &&
+        header.header.toLowerCase().includes("package") &&
+        header.services &&
+        header.services.length > 0
     );
 
-
-    const hasCustomizedHeader = quotation.headers?.some(header =>
-      header.header &&
-      header.header.toLowerCase().includes('customized') &&
-      header.services &&
-      header.services.length > 0
+    const hasCustomizedHeader = quotation.headers?.some(
+      (header) =>
+        header.header &&
+        header.header.toLowerCase().includes("customized") &&
+        header.services &&
+        header.services.length > 0
     );
-
 
     if (quotation.effectiveDiscountPercent > (user?.threshold || 0)) {
       reasons.push(`High discount (${quotation.effectiveDiscountPercent}%)`);
     }
 
-
     if (hasPackages) {
       reasons.push("Package services selected");
     }
-
 
     if (hasCustomizedHeader) {
       reasons.push("Customized header with services");
     }
 
-
     if (quotation.customTerms && quotation.customTerms.length > 0) {
       reasons.push("Custom terms added");
     }
 
-
     return reasons;
   };
-
-
-const shouldBeCompleteStatus = (quotation) => {
-  // Check if discount is within threshold
-  const discountWithinThreshold = quotation.effectiveDiscountPercent <= (user?.threshold || 0);
-  
-  // Check if no custom terms are added
-  const noCustomTerms = !quotation.customTerms || quotation.customTerms.length === 0;
-  
-  // NEW LOGIC: Check for add-on services specifically
-  const hasAddonServices = quotation.headers?.some(header => 
-    header.services?.some(service => {
-      const serviceId = service.id || '';
-      return serviceId.startsWith('service-addon-');
-    })
-  );
-  
-  // Check for customized headers with services
-  const hasCustomizedHeader = quotation.headers?.some(header => {
-    const headerName = header.header?.toLowerCase() || '';
-    const hasServices = header.services && header.services.length > 0;
-    const isCustomizedHeader = headerName.includes('customized');
-    return isCustomizedHeader && hasServices;
-  });
-  
-  console.log(`🔍 Debugging ${quotation.id}:`);
-  console.log(`  - Discount: ${quotation.effectiveDiscountPercent}% vs Threshold: ${user?.threshold || 0}%`);
-  console.log(`  - Custom terms: ${quotation.customTerms?.length || 0}`);
-  console.log(`  - Has add-on services: ${hasAddonServices}`);
-  console.log(`  - Has customized headers: ${hasCustomizedHeader}`);
-  
-  const noApprovalServices = !hasAddonServices && !hasCustomizedHeader;
-  const result = discountWithinThreshold && noCustomTerms && noApprovalServices;
-  
-  console.log(`  - Should be completed: ${result}`);
-  
-  return result;
-};
-
-
-
-  // MODIFIED FUNCTION: Updated to accept quotation parameter and override status
-  const getStatusChip = (status, quotation = null) => {
-    // Override status to "completed" if conditions are met
-    let displayStatus = status;
-    if (quotation && shouldBeCompleteStatus(quotation)) {
-      displayStatus = "completed";
-    }
-    
-    const statusConfig = {
-      completed: { label: "Completed", color: "success" },
-      approved: { label: "Approved", color: "success" },
-      rejected: { label: "Rejected", color: "error" },
-      pending_approval: { label: "Pending", color: "warning" },
-      draft: { label: "Draft", color: "default" }
-    };
-
-
-    const config = statusConfig[displayStatus] || { label: displayStatus, color: "default" };
-    return (
-      <Chip
-        label={config.label}
-        color={config.color}
-        size="small"
-        variant="filled"
-      />
-    );
-  };
-
 
   const requiresSpecialApproval = (quotation) => {
     const exceedsThreshold = quotation.effectiveDiscountPercent > (user?.threshold || 0);
@@ -485,15 +434,12 @@ const shouldBeCompleteStatus = (quotation) => {
     return exceedsThreshold || hasCustomTerms;
   };
 
-
-  // Get current logged-in user information for display
   const getCurrentUserDisplay = () => {
     if (user) {
       return `${user.fname} ${user.lname} (${user.role?.toUpperCase()})`;
     }
-    return 'Loading...';
+    return "Loading...";
   };
-
 
   useEffect(() => {
     if (!token) {
@@ -505,7 +451,6 @@ const shouldBeCompleteStatus = (quotation) => {
     fetchPending();
   }, [token, navigate]);
 
-
   if (!user) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -516,58 +461,55 @@ const shouldBeCompleteStatus = (quotation) => {
     );
   }
 
-
-  // Excel-like table styles
   const excelTableStyles = {
-    '& .MuiTableContainer-root': {
-      border: '2px solid #d0d7de',
-      borderRadius: '6px',
+    "& .MuiTableContainer-root": {
+      border: "2px solid #d0d7de",
+      borderRadius: "6px",
     },
-    '& .MuiTable-root': {
-      borderCollapse: 'separate',
+    "& .MuiTable-root": {
+      borderCollapse: "separate",
       borderSpacing: 0,
     },
-    '& .MuiTableHead-root': {
-      '& .MuiTableCell-root': {
-        backgroundColor: '#f6f8fa',
-        borderRight: '1px solid #d0d7de',
-        borderBottom: '2px solid #d0d7de',
-        padding: '8px 12px',
-        fontSize: '0.875rem',
+    "& .MuiTableHead-root": {
+      "& .MuiTableCell-root": {
+        backgroundColor: "#f6f8fa",
+        borderRight: "1px solid #d0d7de",
+        borderBottom: "2px solid #d0d7de",
+        padding: "8px 12px",
+        fontSize: "0.875rem",
         fontWeight: 600,
-        color: '#24292f',
-        '&:last-child': {
-          borderRight: 'none',
+        color: "#24292f",
+        "&:last-child": {
+          borderRight: "none",
         },
       },
     },
-    '& .MuiTableBody-root': {
-      '& .MuiTableRow-root': {
-        '&:nth-of-type(even)': {
-          backgroundColor: '#f6f8fa',
+    "& .MuiTableBody-root": {
+      "& .MuiTableRow-root": {
+        "&:nth-of-type(even)": {
+          backgroundColor: "#f6f8fa",
         },
-        '&:hover': {
-          backgroundColor: '#eef4fd',
+        "&:hover": {
+          backgroundColor: "#eef4fd",
         },
-        '& .MuiTableCell-root': {
-          borderRight: '1px solid #d0d7de',
-          borderBottom: '1px solid #d0d7de',
-          padding: '6px 12px',
-          fontSize: '0.8125rem',
-          color: '#24292f',
-          '&:last-child': {
-            borderRight: 'none',
+        "& .MuiTableCell-root": {
+          borderRight: "1px solid #d0d7de",
+          borderBottom: "1px solid #d0d7de",
+          padding: "6px 12px",
+          fontSize: "0.8125rem",
+          color: "#24292f",
+          "&:last-child": {
+            borderRight: "none",
           },
         },
       },
     },
   };
 
-
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Typography variant="h4" component="h1" fontWeight="bold">
           Dashboard - {getCurrentUserDisplay()}
         </Typography>
@@ -576,39 +518,23 @@ const shouldBeCompleteStatus = (quotation) => {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleCreateQuotation}
-            sx={{
-              bgcolor: '#1976d2',
-              '&:hover': { bgcolor: '#1565c0' },
-              textTransform: 'none'
-            }}
+            sx={{ bgcolor: "#1976d2", "&:hover": { bgcolor: "#1565c0" }, textTransform: "none" }}
           >
             New Quotation
           </Button>
           {(role === "admin" || role === "manager") && (
-            <Button
-              variant="outlined"
-              startIcon={<PersonAddIcon />}
-              onClick={handleCreateUser}
-              sx={{ textTransform: 'none' }}
-            >
+            <Button variant="outlined" startIcon={<PersonAddIcon />} onClick={handleCreateUser} sx={{ textTransform: "none" }}>
               Create User
             </Button>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<LogoutIcon />}
-            onClick={handleLogout}
-            color="error"
-            sx={{ textTransform: 'none' }}
-          >
+          <Button variant="outlined" startIcon={<LogoutIcon />} onClick={handleLogout} color="error" sx={{ textTransform: "none" }}>
             Logout
           </Button>
         </Stack>
       </Box>
 
-
-      {/* Single Unified Search Section */}
-      <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }}>
+      {/* Search Section */}
+      <Paper sx={{ p: 3, mb: 3, backgroundColor: "#f8f9fa" }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={8}>
             <TextField
@@ -618,30 +544,26 @@ const shouldBeCompleteStatus = (quotation) => {
               value={unifiedSearch}
               onChange={(e) => setUnifiedSearch(e.target.value)}
               size="small"
-              sx={{ 
-                backgroundColor: 'white',
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: '#d0d7de',
+              sx={{
+                backgroundColor: "white",
+                "& .MuiOutlinedInput-root": {
+                  "& fieldset": {
+                    borderColor: "#d0d7de",
                   },
-                  '&:hover fieldset': {
-                    borderColor: '#1976d2',
+                  "&:hover fieldset": {
+                    borderColor: "#1976d2",
                   },
-                }
+                },
               }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#656d76' }} />
+                    <SearchIcon sx={{ color: "#656d76" }} />
                   </InputAdornment>
                 ),
                 endAdornment: unifiedSearch && (
                   <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => setUnifiedSearch('')}
-                      sx={{ color: '#656d76' }}
-                    >
+                    <IconButton size="small" onClick={() => setUnifiedSearch("")} sx={{ color: "#656d76" }}>
                       <CloseIcon fontSize="small" />
                     </IconButton>
                   </InputAdornment>
@@ -653,42 +575,32 @@ const shouldBeCompleteStatus = (quotation) => {
             <Stack direction="row" spacing={2} justifyContent="flex-end" alignItems="center">
               {unifiedSearch && (
                 <Alert severity="info" sx={{ py: 0.5 }}>
-                  Showing {filteredAndSortedData.length} of{" "}
-                  {activeTab === 1 ? pending.length : quotations.length} quotations
+                  Showing {filteredAndSortedData.length} of {activeTab === 1 ? pending.length : quotations.length} quotations
                 </Alert>
               )}
-              <Tooltip title={`PDF downloads will use: ${getDisplayModeDescription()}`}>
-              </Tooltip>
+              <Tooltip title={`PDF downloads will use: ${getDisplayModeDescription()}`}></Tooltip>
             </Stack>
           </Grid>
         </Grid>
       </Paper>
 
-
       {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+      <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
         <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab 
-            label={`ALL QUOTATIONS (${quotations.length})`} 
-            sx={{ textTransform: 'none', fontWeight: 'bold' }}
-          />
+          <Tab label={`ALL QUOTATIONS (${quotations.length})`} sx={{ textTransform: "none", fontWeight: "bold" }} />
           {(role === "admin" || role === "manager") && (
-            <Tab 
-              label={`PENDING APPROVAL (${pending.length})`}
-              sx={{ textTransform: 'none', fontWeight: 'bold' }}
-            />
+            <Tab label={`PENDING APPROVAL (${pending.length})`} sx={{ textTransform: "none", fontWeight: "bold" }} />
           )}
         </Tabs>
       </Box>
 
-
-      {/* Excel-like Enhanced Table */}
-      <TableContainer 
-        component={Paper} 
+      {/* Quotation Table */}
+      <TableContainer
+        component={Paper}
         sx={{
           ...excelTableStyles,
-          maxHeight: 'calc(100vh - 280px)',
-          overflow: 'auto',
+          maxHeight: "calc(100vh - 280px)",
+          overflow: "auto",
         }}
       >
         <Table stickyHeader size="small">
@@ -696,45 +608,45 @@ const shouldBeCompleteStatus = (quotation) => {
             <TableRow>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'createdAt'}
-                  direction={sortConfig.key === 'createdAt' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('createdAt')}
+                  active={sortConfig.key === "createdAt"}
+                  direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("createdAt")}
                 >
                   Date
                 </TableSortLabel>
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'id'}
-                  direction={sortConfig.key === 'id' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('id')}
+                  active={sortConfig.key === "id"}
+                  direction={sortConfig.key === "id" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("id")}
                 >
                   Quotation ID
                 </TableSortLabel>
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'projectName'}
-                  direction={sortConfig.key === 'projectName' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('projectName')}
+                  active={sortConfig.key === "projectName"}
+                  direction={sortConfig.key === "projectName" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("projectName")}
                 >
                   Project Name
                 </TableSortLabel>
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'developerName'}
-                  direction={sortConfig.key === 'developerName' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('developerName')}
+                  active={sortConfig.key === "developerName"}
+                  direction={sortConfig.key === "developerName" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("developerName")}
                 >
                   Promoter
                 </TableSortLabel>
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'totalAmount'}
-                  direction={sortConfig.key === 'totalAmount' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('totalAmount')}
+                  active={sortConfig.key === "totalAmount"}
+                  direction={sortConfig.key === "totalAmount" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("totalAmount")}
                 >
                   Total Value
                 </TableSortLabel>
@@ -742,27 +654,27 @@ const shouldBeCompleteStatus = (quotation) => {
               <TableCell>Services Summary</TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'status'}
-                  direction={sortConfig.key === 'status' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('status')}
+                  active={sortConfig.key === "status"}
+                  direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("status")}
                 >
                   Status
                 </TableSortLabel>
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'createdBy'}
-                  direction={sortConfig.key === 'createdBy' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('createdBy')}
+                  active={sortConfig.key === "createdBy"}
+                  direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("createdBy")}
                 >
                   Created By
                 </TableSortLabel>
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortConfig.key === 'approvedBy'}
-                  direction={sortConfig.key === 'approvedBy' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('approvedBy')}
+                  active={sortConfig.key === "approvedBy"}
+                  direction={sortConfig.key === "approvedBy" ? sortConfig.direction : "asc"}
+                  onClick={() => handleSort("approvedBy")}
                 >
                   Approved By
                 </TableSortLabel>
@@ -773,19 +685,19 @@ const shouldBeCompleteStatus = (quotation) => {
               )}
             </TableRow>
           </TableHead>
+
           <TableBody>
             {filteredAndSortedData.length === 0 ? (
               <TableRow>
-                <TableCell 
-                  colSpan={activeTab === 1 && (role === "admin" || role === "manager") ? 11 : 10} 
-                  align="center" 
+                <TableCell
+                  colSpan={activeTab === 1 && (role === "admin" || role === "manager") ? 11 : 10}
+                  align="center"
                   sx={{ py: 4 }}
                 >
                   <Typography variant="body1" color="text.secondary">
-                    {unifiedSearch 
-                      ? "No quotations match your search criteria" 
-                      : `No ${activeTab === 1 ? "pending" : ""} quotations found`
-                    }
+                    {unifiedSearch
+                      ? "No quotations match your search criteria"
+                      : `No ${activeTab === 1 ? "pending" : ""} quotations found`}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -794,39 +706,31 @@ const shouldBeCompleteStatus = (quotation) => {
                 const serviceInfo = getServicesSummary(q);
                 return (
                   <TableRow key={q.id}>
-                    <TableCell>
-                      {q.createdAt ? new Date(q.createdAt).toLocaleDateString('en-GB') : '-'}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#0969da' }}>
-                      {q.id}
-                    </TableCell>
+                    <TableCell>{q.createdAt ? new Date(q.createdAt).toLocaleDateString("en-GB") : "-"}</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", color: "#0969da" }}>{q.id}</TableCell>
                     <TableCell>{q.projectName || "N/A"}</TableCell>
-                    <TableCell>{q.developerName || q.promoterName || 'N/A'}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>
-                      ₹{q.totalAmount?.toLocaleString() || '0'}
-                    </TableCell>
+                    <TableCell>{q.developerName || q.promoterName || "N/A"}</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>₹{q.totalAmount?.toLocaleString() || "0"}</TableCell>
                     <TableCell>
                       <Tooltip title={serviceInfo.fullText} placement="top">
-                        <Box sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <Box sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>
                           {serviceInfo.summary}
                         </Box>
                       </Tooltip>
                     </TableCell>
                     <TableCell>{getStatusChip(q.status, q)}</TableCell>
                     <TableCell>
-                      {/* Show current logged-in user if this quotation was created by them */}
-                      {q.createdBy === user?.id || q.createdBy === user?.email 
-                        ? `${user.fname} ${user.lname} (You)` 
-                        : q.createdBy || 'System'
-                      }
+                      {q.createdBy === user?.id || q.createdBy === user?.email
+                        ? `${user.fname} ${user.lname} (You)`
+                        : q.createdBy || "System"}
                     </TableCell>
-                    <TableCell>{q.approvedBy || '-'}</TableCell>
+                    <TableCell>{q.approvedBy || "-"}</TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.5}>
                         <IconButton
                           size="small"
                           onClick={() => handleViewQuotation(q.id)}
-                          sx={{ color: '#0066cc' }}
+                          sx={{ color: "#0066cc" }}
                           title="View"
                         >
                           <VisibilityIcon fontSize="small" />
@@ -834,7 +738,7 @@ const shouldBeCompleteStatus = (quotation) => {
                         <IconButton
                           size="small"
                           onClick={() => handleEditQuotation(q.id)}
-                          sx={{ color: '#ff9800' }}
+                          sx={{ color: "#ff9800" }}
                           title="Edit"
                         >
                           <EditIcon fontSize="small" />
@@ -842,8 +746,18 @@ const shouldBeCompleteStatus = (quotation) => {
                         <IconButton
                           size="small"
                           onClick={() => handleDownloadQuotation(q)}
-                          sx={{ color: '#4caf50' }}
-                          title="Download"
+                          sx={{
+                            color:
+                              q.status === "pending_approval" || q.status === "pending"
+                                ? "#ccc"
+                                : "#4caf50",
+                          }}
+                          title={
+                            q.status === "pending_approval" || q.status === "pending"
+                              ? `Cannot download - ${q.status}`
+                              : "Download"
+                          }
+                          disabled={q.status === "pending_approval" || q.status === "pending"}
                         >
                           <DownloadIcon fontSize="small" />
                         </IconButton>
@@ -855,7 +769,7 @@ const shouldBeCompleteStatus = (quotation) => {
                           <IconButton
                             size="small"
                             onClick={() => handleApprovalClick(q, "approve")}
-                            sx={{ color: '#4caf50' }}
+                            sx={{ color: "#4caf50" }}
                             title="Approve"
                           >
                             <CheckIcon fontSize="small" />
@@ -863,14 +777,14 @@ const shouldBeCompleteStatus = (quotation) => {
                           <IconButton
                             size="small"
                             onClick={() => handleApprovalClick(q, "reject")}
-                            sx={{ color: '#f44336' }}
+                            sx={{ color: "#f44336" }}
                             title="Reject"
                           >
                             <CloseIcon fontSize="small" />
                           </IconButton>
                           {requiresSpecialApproval(q) && (
                             <Tooltip title="Requires special approval">
-                              <WarningIcon fontSize="small" sx={{ color: '#ff9800', ml: 0.5 }} />
+                              <WarningIcon fontSize="small" sx={{ color: "#ff9800", ml: 0.5 }} />
                             </Tooltip>
                           )}
                         </Stack>
@@ -884,21 +798,18 @@ const shouldBeCompleteStatus = (quotation) => {
         </Table>
       </TableContainer>
 
-
-      {/* Enhanced Approval Preview Modal */}
+      {/* Approval Modal */}
       <Dialog
         open={showApprovalModal}
         onClose={() => setShowApprovalModal(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '12px'
-          }
-        }}
+        PaperProps={{ sx: { borderRadius: "12px" } }}
       >
         <DialogTitle sx={{ pb: 1 }}>
-          {approvalAction === "approve" ? "✓ Quotation Approval Preview" : "✗ Quotation Rejection Preview"}
+          {approvalAction === "approve"
+            ? "✓ Quotation Approval Preview"
+            : "✗ Quotation Rejection Preview"}
         </DialogTitle>
         <DialogContent>
           {selectedQuotation && (
@@ -923,7 +834,12 @@ const shouldBeCompleteStatus = (quotation) => {
                         Discount Amount:
                       </Typography>
                       <Typography variant="h6" color="error">
-                        -₹{((selectedQuotation.totalAmount || 0) * (selectedQuotation.effectiveDiscountPercent || 0) / 100).toLocaleString()}
+                        -₹
+                        {(
+                          (selectedQuotation.totalAmount || 0) *
+                          (selectedQuotation.effectiveDiscountPercent || 0) /
+                          100
+                        ).toLocaleString()}
                       </Typography>
                     </Grid>
                     <Grid item xs={12}>
@@ -937,7 +853,6 @@ const shouldBeCompleteStatus = (quotation) => {
                   </Grid>
                 </CardContent>
               </Card>
-
 
               {/* Custom Terms */}
               {selectedQuotation.customTerms && selectedQuotation.customTerms.length > 0 && (
@@ -958,7 +873,6 @@ const shouldBeCompleteStatus = (quotation) => {
                 </Card>
               )}
 
-
               {/* Approval Context */}
               <Card variant="outlined">
                 <CardContent sx={{ pb: 2 }}>
@@ -970,31 +884,28 @@ const shouldBeCompleteStatus = (quotation) => {
                       <Typography variant="body2" color="text.secondary">
                         Your Threshold:
                       </Typography>
-                      <Typography variant="body1">
-                        {user?.threshold || 0}%
-                      </Typography>
+                      <Typography variant="body1">{user?.threshold || 0}%</Typography>
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="text.secondary">
                         Requested Discount:
                       </Typography>
-                      <Typography variant="body1">
-                        {selectedQuotation.effectiveDiscountPercent}%
-                      </Typography>
+                      <Typography variant="body1">{selectedQuotation.effectiveDiscountPercent}%</Typography>
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="text.secondary">
                         Custom Terms:
                       </Typography>
-                      <Typography variant="body1">
-                        {selectedQuotation.customTerms?.length || 0} terms added
-                      </Typography>
+                      <Typography variant="body1">{selectedQuotation.customTerms?.length || 0} terms added</Typography>
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="text.secondary">
                         Status:
                       </Typography>
-                      <Typography variant="body1" color={requiresSpecialApproval(selectedQuotation) ? "warning.main" : "success.main"}>
+                      <Typography
+                        variant="body1"
+                        color={requiresSpecialApproval(selectedQuotation) ? "warning.main" : "success.main"}
+                      >
                         {requiresSpecialApproval(selectedQuotation)
                           ? "Exceeds your threshold or has custom terms"
                           : "Within normal parameters"}
@@ -1003,7 +914,6 @@ const shouldBeCompleteStatus = (quotation) => {
                   </Grid>
                 </CardContent>
               </Card>
-
 
               {/* Services Summary */}
               <Card variant="outlined">
@@ -1014,9 +924,7 @@ const shouldBeCompleteStatus = (quotation) => {
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     Selected Services:
                   </Typography>
-                  <Typography variant="body1">
-                    {getServicesSummary(selectedQuotation).fullText}
-                  </Typography>
+                  <Typography variant="body1">{getServicesSummary(selectedQuotation).fullText}</Typography>
                 </CardContent>
               </Card>
             </Stack>
@@ -1026,13 +934,7 @@ const shouldBeCompleteStatus = (quotation) => {
           <Button
             onClick={() => setShowApprovalModal(false)}
             variant="outlined"
-            sx={{
-              borderRadius: '8px',
-              textTransform: 'none',
-              px: 3,
-              color: '#6c757d',
-              borderColor: '#6c757d'
-            }}
+            sx={{ borderRadius: "8px", textTransform: "none", px: 3, color: "#6c757d", borderColor: "#6c757d" }}
           >
             Cancel
           </Button>
@@ -1040,11 +942,7 @@ const shouldBeCompleteStatus = (quotation) => {
             onClick={handleConfirmApproval}
             variant="contained"
             color={approvalAction === "approve" ? "success" : "error"}
-            sx={{
-              borderRadius: '8px',
-              textTransform: 'none',
-              px: 3
-            }}
+            sx={{ borderRadius: "8px", textTransform: "none", px: 3 }}
           >
             ✓ {approvalAction === "approve" ? "Confirm Approval" : "Confirm Rejection"}
           </Button>

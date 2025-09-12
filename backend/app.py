@@ -508,6 +508,12 @@ def download_quotation_pdf(quotation_id):
         q = Quotation.query.filter_by(id=quotation_id).first()
         if not q:
             return jsonify({'error': 'Quotation not found'}), 404
+        if q.status in ['pending_approval', 'pending']:
+            return jsonify({
+                'error': 'Cannot download PDF for pending quotations',
+                'message': f'Quotation {quotation_id} is currently {q.status}. PDF download is not allowed until approval is completed.',
+                'status': q.status
+            }), 403
 
         # **ENHANCED: Use saved display mode from database**
         app.logger.info(f"Full request URL: {request.url}")
