@@ -1,4 +1,4 @@
-# services_data.py
+# services_data.py - REFACTORED with Package + Add-on Logic Fix
 import json
 
 class ServicesDataManager:
@@ -326,7 +326,7 @@ class ServicesDataManager:
         return package_services
 
     def process_headers_with_subservices(self, headers):
-        """Process headers and expand with proper subservices for all header types"""
+        """Enhanced processing to properly handle add-on services in packages"""
         processed_headers = []
         
         for header in headers:
@@ -337,14 +337,49 @@ class ServicesDataManager:
                 'services': []
             }
             
-            # **Handle different header types**
             if self.is_package_header(header_name):
-                # For packages, expand to include all package services
+                # For packages, first add core package services
                 package_services = self.get_services_for_package(header_name)
-                processed_header['services'] = package_services
                 
+                # Add core package services
+                for package_service in package_services:
+                    processed_service = {
+                        'id': package_service['id'],
+                        'name': package_service['name'], 
+                        'label': package_service['label'],
+                        'subServices': package_service.get('subServices', [])
+                    }
+                    processed_header['services'].append(processed_service)
+                
+                # CRITICAL FIX: Also add any additional services (including add-ons)
+                for service in header.get('services', []):
+                    service_id = service.get('id')
+                    
+                    # Skip if this service is already added as core package service
+                    already_exists = any(ps['id'] == service_id for ps in processed_header['services'])
+                    if not already_exists:
+                        actual_subservices = self.get_actual_subservices(service_id)
+                        
+                        processed_service = {
+                            'id': service_id,
+                            'name': service.get('name') or service.get('label'),
+                            'label': service.get('label') or service.get('name'),
+                            'subServices': actual_subservices
+                        }
+                        
+                        # Preserve quarter information if present
+                        if service.get('quarterCount'):
+                            processed_service['quarterCount'] = service.get('quarterCount')
+                        if service.get('selectedQuarters'):
+                            processed_service['selectedQuarters'] = service.get('selectedQuarters')
+                        if service.get('selectedYears'):
+                            processed_service['selectedYears'] = service.get('selectedYears')
+                        
+                        processed_header['services'].append(processed_service)
+                        print(f"✅ Added add-on service to package: {service_id}")
+            
             elif self.is_customized_header(header_name):
-                # For customized headers, process selected services
+                # For customized headers, process selected services normally
                 for service in header.get('services', []):
                     service_id = service.get('id')
                     actual_subservices = self.get_actual_subservices(service_id)
@@ -365,7 +400,7 @@ class ServicesDataManager:
                         processed_service['selectedYears'] = service.get('selectedYears')
                     
                     processed_header['services'].append(processed_service)
-                    
+            
             else:
                 # For regular headers, process services normally
                 for service in header.get('services', []):
@@ -407,7 +442,7 @@ class ServicesDataManager:
             "REMOVAL FROM ABEYANCE (QPR)": "Removal of Abeyance - QPR, Lapsed",
             "Extension of Project Completion Date U/S 7(3)": "Project Extension - Section 7.3",
             "PROJECT CLOSURE": "Project Closure ",
-            "10.	Extension of Project Completion Date u/s 6": "Project Extension - Section 7.3",
+            "10. Extension of Project Completion Date u/s 6": "Project Extension - Section 7.3",
             "POST FACTO EXTENSION": "Project Extension - Post Facto",
             "EXTENSION UNDER ORDER 40": "Project Extension - Order No. 40",
             "Correction (Change of Bank Account)": "Project Correction - Change of Bank Account",
@@ -456,8 +491,6 @@ class ServicesDataManager:
             formatted_category = category.title()  # "category 1" -> "Category 1"
         else:
             formatted_category = category
-        
-        # Debug logging removed for cleaner output
         
         # Determine pricing band - exact matching with what's in the data
         if plot_area <= 500:
@@ -508,12 +541,12 @@ class ServicesDataManager:
                         continue
                 elif isinstance(amount, (int, float)):
                     return float(amount)
-                    
+        
         # Final fallback
         return 50000
 
     def calculate_enhanced_pricing(self, category, region, plot_area, headers, pricing_data):
-        """Enhanced pricing calculation that handles all service types properly with flat pricing array"""
+        """Enhanced pricing calculation that properly handles add-on services in packages"""
         
         breakdown, total, total_services = [], 0.0, 0
 
@@ -525,16 +558,13 @@ class ServicesDataManager:
             services_to_process = []
             
             if self.is_package_header(header_name):
-                # For packages, use the single package price from JSON instead of expanding services
+                # For packages, calculate core package price
                 package_price = self._find_pricing_from_array(category, region, plot_area, header_name, pricing_data)
                 
-                # Get the services for display purposes but use the single package price
-                package_services = self.get_services_for_package(header_name)
-                
-                # Create a single service entry representing the entire package
+                # Add core package as single line item
                 header_services.append({
                     "id": f"package-{header_name.lower().replace(' ', '-')}",
-                    "name": header_name,
+                    "name": f"{header_name} (Core Services)",
                     "baseAmount": package_price,
                     "totalAmount": round(package_price, 2),
                     "subServices": []
@@ -542,6 +572,58 @@ class ServicesDataManager:
                 
                 header_total += package_price
                 total_services += 1
+                
+                # CRITICAL FIX: Process additional add-on services separately
+                for service in header_data.get('services', []):
+                    service_id = service.get('id', '')
+                    
+                    # Only process add-on services (not core package services)
+                    if service_id.startswith('service-addon-'):
+                        s_name = service.get('label') or service.get('name', '')
+                        
+                        # Get pricing for add-on service
+                        addon_price = self._find_pricing_from_array(category, region, plot_area, s_name, pricing_data)
+                        
+                        # Get actual subservices
+                        actual_subservices = self.get_actual_subservices(service_id)
+                        
+                        # Handle time-based pricing for add-ons
+                        service_data = self.COMPLETE_SERVICES_DATA.get(service_id, {})
+                        requires_quarter_pricing = service_data.get('requiresYearQuarter', False)
+                        requires_year_pricing = service_data.get('requiresYearOnly', False)
+                        
+                        if requires_quarter_pricing:
+                            quarter_count = service.get('quarterCount', 1)
+                            total_amt = addon_price * quarter_count
+                        elif requires_year_pricing:
+                            year_count = len(service.get('selectedYears', [])) or 1
+                            total_amt = addon_price * year_count
+                        else:
+                            total_amt = addon_price
+
+                        service_entry = {
+                            "id": service_id,
+                            "name": f"{s_name} (Add-on)",
+                            "baseAmount": addon_price,
+                            "totalAmount": round(total_amt, 2),
+                            "subServices": actual_subservices
+                        }
+                        
+                        # Add time-based pricing information if applicable
+                        if requires_quarter_pricing:
+                            service_entry["requiresYearQuarter"] = True
+                            service_entry["quarterCount"] = service.get('quarterCount', 1)
+                            service_entry["basePrice"] = addon_price
+                        elif requires_year_pricing:
+                            service_entry["requiresYearOnly"] = True
+                            service_entry["yearCount"] = len(service.get('selectedYears', [])) or 1
+                            service_entry["basePrice"] = addon_price
+                        
+                        header_services.append(service_entry)
+                        header_total += total_amt
+                        total_services += 1
+                        
+                        print(f"💰 Added add-on pricing: {s_name} = ₹{total_amt}")
                 
                 # Skip the normal service processing for packages
                 services_to_process = []
@@ -614,6 +696,7 @@ class ServicesDataManager:
             "summary": {"subtotal": round(total, 2), "totalServices": total_services}
         }
 
+
 # Create a global instance
 services_manager = ServicesDataManager()
 
@@ -636,19 +719,42 @@ def process_headers_with_subservices(headers):
 def calculate_enhanced_pricing(category, region, plot_area, headers, pricing_data):
     return services_manager.calculate_enhanced_pricing(category, region, plot_area, headers, pricing_data)
 
+# **UPDATED APPROVAL FUNCTIONS** - NEW LOGIC FOR CORE vs ADD-ON SERVICES
+
 def requires_approval_due_to_packages(headers):
+    """
+    NEW LOGIC: Only require approval if package headers contain ADD-ON services
+    Core package services alone should NOT require approval
+    """
     if not headers:
         return False
     
     for header_data in headers:
         header_name = header_data.get('header', '') or header_data.get('name', '')
+        
+        # Check if this is a package header
         if is_package_header(header_name):
             services = header_data.get('services', [])
             if services and len(services) > 0:
-                return True
+                
+                # Check if any services are ADD-ON services (not core package services)
+                for service in services:
+                    service_id = service.get('id', '')
+                    
+                    # If service ID starts with 'service-addon-', it's an add-on service
+                    if service_id.startswith('service-addon-'):
+                        print(f"🚨 APPROVAL REQUIRED: Package '{header_name}' contains add-on service '{service_id}'")
+                        return True
+                        
+                # If we reach here, package contains only core services
+                print(f"✅ NO APPROVAL: Package '{header_name}' contains only core services")
+    
     return False
 
 def requires_approval_due_to_customized_header(headers):
+    """
+    Keep existing logic for customized headers
+    """
     if not headers:
         return False
     
@@ -657,5 +763,20 @@ def requires_approval_due_to_customized_header(headers):
         if is_customized_header(header_name):
             services = header_data.get('services', [])
             if services and len(services) > 0:
+                return True
+    return False
+
+def has_addon_services_in_packages(headers):
+    """
+    NEW HELPER: Check specifically for add-on services in any header
+    """
+    if not headers:
+        return False
+        
+    for header_data in headers:
+        services = header_data.get('services', [])
+        for service in services:
+            service_id = service.get('id', '')
+            if service_id.startswith('service-addon-'):
                 return True
     return False

@@ -49,6 +49,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import { useDisplayMode } from '../context/DisplayModeContext';
 
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [quotations, setQuotations] = useState([]);
@@ -59,6 +60,7 @@ export default function Dashboard() {
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [approvalAction, setApprovalAction] = useState("approve");
 
+
   // Single unified search state
   const [unifiedSearch, setUnifiedSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -66,8 +68,10 @@ export default function Dashboard() {
   // Use display mode context for synchronized PDF downloads
   const { getDisplayModeForAPI, displayMode, getDisplayModeLabel, getDisplayModeDescription } = useDisplayMode();
 
+
   const role = localStorage.getItem("role");
   const token = localStorage.getItem("token");
+
 
   const fetchProfile = async () => {
     if (token) {
@@ -88,6 +92,7 @@ export default function Dashboard() {
     }
   };
 
+
   const fetchQuotations = async () => {
     try {
       const res = await fetch("http://localhost:3001/api/quotations", {
@@ -99,6 +104,7 @@ export default function Dashboard() {
       console.error("Failed to fetch quotations:", error);
     }
   };
+
 
   const fetchPending = async () => {
     if (role === "admin" || role === "manager") {
@@ -118,9 +124,11 @@ export default function Dashboard() {
     }
   };
 
+
   // Enhanced unified search functionality
   const filteredAndSortedData = useMemo(() => {
     let data = activeTab === 1 ? pending : quotations;
+
 
     // Apply unified search across ALL columns
     if (unifiedSearch) {
@@ -142,21 +150,25 @@ export default function Dashboard() {
           )
         ];
 
+
         // Combine all searchable text
         const searchableText = searchableFields
           .filter(field => field != null && field !== undefined)
           .join(' ')
           .toLowerCase();
 
+
         return searchableText.includes(searchLower);
       });
     }
+
 
     // Apply sorting
     if (sortConfig.key) {
       data = [...data].sort((a, b) => {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
+
 
         if (sortConfig.key === 'createdAt') {
           aValue = new Date(aValue);
@@ -169,6 +181,7 @@ export default function Dashboard() {
           bValue = String(bValue || '').toLowerCase();
         }
 
+
         if (aValue < bValue) {
           return sortConfig.direction === 'asc' ? -1 : 1;
         }
@@ -179,8 +192,10 @@ export default function Dashboard() {
       });
     }
 
+
     return data;
   }, [quotations, pending, activeTab, unifiedSearch, sortConfig]);
+
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -189,6 +204,7 @@ export default function Dashboard() {
     }
     setSortConfig({ key, direction });
   };
+
 
   const handleApprovalClick = (quotation, action) => {
     if (role === "manager" && quotation.effectiveDiscountPercent > user?.threshold) {
@@ -200,8 +216,10 @@ export default function Dashboard() {
     setShowApprovalModal(true);
   };
 
+
   const handleConfirmApproval = async () => {
     if (!selectedQuotation) return;
+
 
     try {
       const res = await fetch(
@@ -216,13 +234,13 @@ export default function Dashboard() {
         }
       );
 
+
       const data = await res.json();
       if (res.ok) {
         fetchPending();
         fetchQuotations();
         setShowApprovalModal(false);
         setSelectedQuotation(null);
-        alert(`Quotation ${approvalAction}d successfully!`);
       } else {
         alert(data.error || `Failed to ${approvalAction} quotation`);
       }
@@ -232,13 +250,16 @@ export default function Dashboard() {
     }
   };
 
+
   const handleViewQuotation = (quotationId) => {
     navigate(`/quotations/${quotationId}/view`);
   };
 
+
   const handleEditQuotation = (quotationId) => {
     navigate(`/quotations/${quotationId}/services`);
   };
+
 
   const handleDownloadQuotation = async (quotation) => {
     try {
@@ -258,15 +279,18 @@ export default function Dashboard() {
         }
       );
 
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
+
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/pdf')) {
         throw new Error('Response is not a PDF file');
       }
+
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
@@ -277,9 +301,11 @@ export default function Dashboard() {
       link.click();
       document.body.removeChild(link);
 
+
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
       }, 1000);
+
 
       console.log(`PDF download initiated successfully with display mode: ${displayModeParam}`);
     } catch (error) {
@@ -288,15 +314,18 @@ export default function Dashboard() {
     }
   };
 
+
   // Enhanced service summary with better display
   const getServicesSummary = (quotation) => {
     if (!quotation.headers || quotation.headers.length === 0) {
       return { summary: "No services selected", fullText: "No services selected", count: 0 };
     }
 
+
     const totalServices = quotation.headers.reduce((total, header) => {
       return total + (header.services ? header.services.length : 0);
     }, 0);
+
 
     const serviceNames = quotation.headers
       .filter(header => header.services && header.services.length > 0)
@@ -305,9 +334,11 @@ export default function Dashboard() {
       )
       .filter(Boolean);
 
+
     const summary = serviceNames.length > 0
       ? `${serviceNames[0]}${serviceNames.length > 1 ? ` +${serviceNames.length - 1} more` : ''}`
       : `${totalServices} service${totalServices !== 1 ? 's' : ''}`;
+
 
     return {
       summary: summary,
@@ -316,22 +347,27 @@ export default function Dashboard() {
     };
   };
 
+
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login");
   };
 
+
   const handleCreateUser = () => {
     navigate("/signup");
   };
+
 
   const handleCreateQuotation = () => {
     navigate("/quotations/new");
   };
 
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
+
 
   const getApprovalReasons = (quotation) => {
     const reasons = [];
@@ -342,6 +378,7 @@ export default function Dashboard() {
       header.services.length > 0
     );
 
+
     const hasCustomizedHeader = quotation.headers?.some(header =>
       header.header &&
       header.header.toLowerCase().includes('customized') &&
@@ -349,26 +386,78 @@ export default function Dashboard() {
       header.services.length > 0
     );
 
+
     if (quotation.effectiveDiscountPercent > (user?.threshold || 0)) {
       reasons.push(`High discount (${quotation.effectiveDiscountPercent}%)`);
     }
+
 
     if (hasPackages) {
       reasons.push("Package services selected");
     }
 
+
     if (hasCustomizedHeader) {
       reasons.push("Customized header with services");
     }
+
 
     if (quotation.customTerms && quotation.customTerms.length > 0) {
       reasons.push("Custom terms added");
     }
 
+
     return reasons;
   };
 
-  const getStatusChip = (status) => {
+
+const shouldBeCompleteStatus = (quotation) => {
+  // Check if discount is within threshold
+  const discountWithinThreshold = quotation.effectiveDiscountPercent <= (user?.threshold || 0);
+  
+  // Check if no custom terms are added
+  const noCustomTerms = !quotation.customTerms || quotation.customTerms.length === 0;
+  
+  // NEW LOGIC: Check for add-on services specifically
+  const hasAddonServices = quotation.headers?.some(header => 
+    header.services?.some(service => {
+      const serviceId = service.id || '';
+      return serviceId.startsWith('service-addon-');
+    })
+  );
+  
+  // Check for customized headers with services
+  const hasCustomizedHeader = quotation.headers?.some(header => {
+    const headerName = header.header?.toLowerCase() || '';
+    const hasServices = header.services && header.services.length > 0;
+    const isCustomizedHeader = headerName.includes('customized');
+    return isCustomizedHeader && hasServices;
+  });
+  
+  console.log(`🔍 Debugging ${quotation.id}:`);
+  console.log(`  - Discount: ${quotation.effectiveDiscountPercent}% vs Threshold: ${user?.threshold || 0}%`);
+  console.log(`  - Custom terms: ${quotation.customTerms?.length || 0}`);
+  console.log(`  - Has add-on services: ${hasAddonServices}`);
+  console.log(`  - Has customized headers: ${hasCustomizedHeader}`);
+  
+  const noApprovalServices = !hasAddonServices && !hasCustomizedHeader;
+  const result = discountWithinThreshold && noCustomTerms && noApprovalServices;
+  
+  console.log(`  - Should be completed: ${result}`);
+  
+  return result;
+};
+
+
+
+  // MODIFIED FUNCTION: Updated to accept quotation parameter and override status
+  const getStatusChip = (status, quotation = null) => {
+    // Override status to "completed" if conditions are met
+    let displayStatus = status;
+    if (quotation && shouldBeCompleteStatus(quotation)) {
+      displayStatus = "completed";
+    }
+    
     const statusConfig = {
       completed: { label: "Completed", color: "success" },
       approved: { label: "Approved", color: "success" },
@@ -377,7 +466,8 @@ export default function Dashboard() {
       draft: { label: "Draft", color: "default" }
     };
 
-    const config = statusConfig[status] || { label: status, color: "default" };
+
+    const config = statusConfig[displayStatus] || { label: displayStatus, color: "default" };
     return (
       <Chip
         label={config.label}
@@ -388,11 +478,13 @@ export default function Dashboard() {
     );
   };
 
+
   const requiresSpecialApproval = (quotation) => {
     const exceedsThreshold = quotation.effectiveDiscountPercent > (user?.threshold || 0);
     const hasCustomTerms = quotation.customTerms && quotation.customTerms.length > 0;
     return exceedsThreshold || hasCustomTerms;
   };
+
 
   // Get current logged-in user information for display
   const getCurrentUserDisplay = () => {
@@ -401,6 +493,7 @@ export default function Dashboard() {
     }
     return 'Loading...';
   };
+
 
   useEffect(() => {
     if (!token) {
@@ -412,6 +505,7 @@ export default function Dashboard() {
     fetchPending();
   }, [token, navigate]);
 
+
   if (!user) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -421,6 +515,7 @@ export default function Dashboard() {
       </Container>
     );
   }
+
 
   // Excel-like table styles
   const excelTableStyles = {
@@ -468,6 +563,7 @@ export default function Dashboard() {
     },
   };
 
+
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
       {/* Header */}
@@ -509,6 +605,7 @@ export default function Dashboard() {
           </Button>
         </Stack>
       </Box>
+
 
       {/* Single Unified Search Section */}
       <Paper sx={{ p: 3, mb: 3, backgroundColor: '#f8f9fa' }}>
@@ -561,22 +658,12 @@ export default function Dashboard() {
                 </Alert>
               )}
               <Tooltip title={`PDF downloads will use: ${getDisplayModeDescription()}`}>
-                <Chip
-                  label={`PDF Mode: ${getDisplayModeLabel()}`}
-                  color="primary"
-                  variant="outlined"
-                  size="small"
-                  sx={{ 
-                    fontSize: '0.75rem',
-                    height: 28,
-                    backgroundColor: displayMode === 'lumpsum' ? 'rgba(25, 118, 210, 0.04)' : 'rgba(25, 118, 210, 0.08)'
-                  }}
-                />
               </Tooltip>
             </Stack>
           </Grid>
         </Grid>
       </Paper>
+
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
@@ -593,6 +680,7 @@ export default function Dashboard() {
           )}
         </Tabs>
       </Box>
+
 
       {/* Excel-like Enhanced Table */}
       <TableContainer 
@@ -724,7 +812,7 @@ export default function Dashboard() {
                         </Box>
                       </Tooltip>
                     </TableCell>
-                    <TableCell>{getStatusChip(q.status)}</TableCell>
+                    <TableCell>{getStatusChip(q.status, q)}</TableCell>
                     <TableCell>
                       {/* Show current logged-in user if this quotation was created by them */}
                       {q.createdBy === user?.id || q.createdBy === user?.email 
@@ -796,6 +884,7 @@ export default function Dashboard() {
         </Table>
       </TableContainer>
 
+
       {/* Enhanced Approval Preview Modal */}
       <Dialog
         open={showApprovalModal}
@@ -849,6 +938,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
+
               {/* Custom Terms */}
               {selectedQuotation.customTerms && selectedQuotation.customTerms.length > 0 && (
                 <Card variant="outlined">
@@ -867,6 +957,7 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               )}
+
 
               {/* Approval Context */}
               <Card variant="outlined">
@@ -913,6 +1004,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
+
               {/* Services Summary */}
               <Card variant="outlined">
                 <CardContent sx={{ pb: 2 }}>
@@ -927,17 +1019,6 @@ export default function Dashboard() {
                   </Typography>
                 </CardContent>
               </Card>
-
-              <Alert severity="info">
-                Please review all details carefully before{" "}
-                {approvalAction === "approve" ? "approving" : "rejecting"} this quotation.
-              </Alert>
-
-              {requiresSpecialApproval(selectedQuotation) && approvalAction === "approve" && (
-                <Alert severity="warning">
-                  This quotation requires special approval due to high discount or custom terms.
-                </Alert>
-              )}
             </Stack>
           )}
         </DialogContent>
